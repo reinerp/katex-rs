@@ -175,7 +175,7 @@ impl<'a> MacroExpander<'a> {
         let expansion = if top_token.noexpand == Some(true) {
             None
         } else {
-            self.get_expansion(name)
+            self.get_expansion(name)?
         };
 
         let expansion = match expansion {
@@ -272,8 +272,9 @@ impl<'a> MacroExpander<'a> {
         Ok(output)
     }
 
-    /// Compute expansion for a name
-    fn get_expansion(&mut self, name: &str) -> Option<MacroExpansion> {
+    /// Compute expansion for a name. Errors raised by function macros (for
+    /// example `\newcommand` redefining a command) propagate, as in KaTeX.
+    fn get_expansion(&mut self, name: &str) -> Result<Option<MacroExpansion>, ParseError> {
         // If single character has a catcode other than 13 (active), don't
         // expand it
         if name.chars().count() == 1
@@ -281,28 +282,25 @@ impl<'a> MacroExpander<'a> {
             && let Some(catcode) = self.lexer.get_catcode(ch)
             && catcode != 13
         {
-            return None;
+            return Ok(None);
         }
 
-        let definition = self.macros.get(name)?.clone();
+        let Some(definition) = self.macros.get(name).cloned() else {
+            return Ok(None);
+        };
 
-        match definition {
-            MacroDefinition::Function(f) => match f(self as &mut dyn MacroContextInterface) {
-                Ok(MacroExpansionResult::String(s)) => Some(self.string_to_expansion(&s)),
-                Ok(MacroExpansionResult::Expansion(e)) => Some(e),
-                Ok(MacroExpansionResult::Empty) => Some(MacroExpansion::default()),
-                Err(_) => None,
-            },
-            MacroDefinition::StaticFunction(f) => match f(self as &mut dyn MacroContextInterface) {
-                Ok(MacroExpansionResult::String(s)) => Some(self.string_to_expansion(&s)),
-                Ok(MacroExpansionResult::Expansion(e)) => Some(e),
-                Ok(MacroExpansionResult::Empty) => Some(MacroExpansion::default()),
-                Err(_) => None,
-            },
-            MacroDefinition::StaticStr(s) => Some(self.string_to_expansion(s)),
-            MacroDefinition::String(s) => Some(self.string_to_expansion(&s)),
-            MacroDefinition::Expansion(e) => Some(e),
-        }
+        let result = match definition {
+            MacroDefinition::Function(f) => f(self as &mut dyn MacroContextInterface)?,
+            MacroDefinition::StaticFunction(f) => f(self as &mut dyn MacroContextInterface)?,
+            MacroDefinition::StaticStr(s) => return Ok(Some(self.string_to_expansion(s))),
+            MacroDefinition::String(s) => return Ok(Some(self.string_to_expansion(&s))),
+            MacroDefinition::Expansion(e) => return Ok(Some(e)),
+        };
+        Ok(Some(match result {
+            MacroExpansionResult::String(s) => self.string_to_expansion(&s),
+            MacroExpansionResult::Expansion(e) => e,
+            MacroExpansionResult::Empty => MacroExpansion::default(),
+        }))
     }
 
     fn string_to_expansion(&self, expansion: &str) -> MacroExpansion {
@@ -552,5 +550,31 @@ impl<'a> MacroContextInterface<'a> for MacroExpander<'a> {
 
     fn end_group(&mut self) -> Result<(), ParseError> {
         self.macros.end_group()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::KatexContext;
+    use crate::parse_tree::parse_tree;
+    use crate::types::{ParseErrorKind, Settings};
+
+    #[test]
+    fn errors_from_function_macros_propagate() {
+        let ctx = KatexContext::default();
+        let settings = Settings::default();
+        let err = parse_tree(&ctx, r"\newcommand\lambda{x}\lambda", &settings)
+            .expect_err("redefinition must fail");
+        assert!(
+            matches!(&*err.kind, ParseErrorKind::NewcommandRedefinition { name } if name == r"\lambda"),
+            "{err}"
+        );
+        let err = parse_tree(
+            &ctx,
+            r"\tag{1}\tag{2}",
+            &Settings::builder().display_mode(true).build(),
+        )
+        .expect_err("two tags must fail");
+        assert!(matches!(&*err.kind, ParseErrorKind::MultipleTag), "{err}");
     }
 }
