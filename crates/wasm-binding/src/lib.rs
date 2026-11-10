@@ -199,6 +199,15 @@ fn parse_js_options(options: JsValue) -> Result<JsSettings, JsValue> {
         settings.allow_macro_definitions = allow;
     }
 
+    if let Some(max_tokens) = opt_number("maxExpandedTokens")? {
+        if !(max_tokens.is_finite() && max_tokens >= 0.0 && max_tokens.fract() == 0.0) {
+            return Err(js_error(
+                "option 'maxExpandedTokens' must be a finite non-negative integer",
+            ));
+        }
+        settings.max_expanded_tokens = max_tokens as usize;
+    }
+
     let strict_value = get("strict")?;
     if !strict_value.is_undefined() && !strict_value.is_null() {
         if let Some(strict_bool) = strict_value.as_bool() {

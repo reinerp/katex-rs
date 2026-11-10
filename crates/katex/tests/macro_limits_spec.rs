@@ -165,3 +165,73 @@ fn pathological_macros_fail_fast_when_disabled() {
         );
     }
 }
+
+fn too_many_tokens(result: &Result<String, ParseError>) -> bool {
+    matches!(result, Err(e) if matches!(*e.kind, ParseErrorKind::TooManyExpandedTokens { .. }))
+}
+
+/// With definitions allowed (the default), argument-copying macros hit the
+/// expanded-token budget instead of multiplying the input: in the evaluation,
+/// three levels took 13 s and produced 84 MB, and four ran out of memory.
+#[test]
+fn argument_copying_fails_fast_with_definitions_allowed() {
+    let ctx = KatexContext::default();
+    let settings = Settings::default();
+    let big = "x".repeat(15_000);
+    let cases = [
+        format!(r"\def\d#1{{#1#1#1#1#1#1#1#1}}\d{{\d{{\d{{{big}}}}}}}"),
+        format!(r"\def\d#1{{#1#1#1#1#1#1#1#1}}\d{{\d{{\d{{\d{{{big}}}}}}}}}"),
+        // One expansion copying a long argument 5,000 times must fail before
+        // building the 75-million-token result.
+        format!(r"\def\d#1{{{}}}\d{{{big}}}", "#1".repeat(5_000)),
+        format!(
+            r"\newcommand\d[1]{{#1#1#1#1}}\d{{\d{{\d{{\d{{\d{{\d{{\d{{\d{{\d{{{big}}}}}}}}}}}}}}}}}}}"
+        ),
+    ];
+    for tex in &cases {
+        let start = Instant::now();
+        let result = render_to_string(&ctx, tex, &settings);
+        assert!(too_many_tokens(&result), "{tex:.60}: {result:?}");
+        assert!(
+            start.elapsed() < Duration::from_secs(2),
+            "{tex:.60}: {:?}",
+            start.elapsed()
+        );
+    }
+}
+
+#[test]
+fn max_expanded_tokens_is_configurable() {
+    let ctx = KatexContext::default();
+    let with = |n: usize| {
+        render_to_string(
+            &ctx,
+            r"\def\a{abcdefghijk}\a",
+            &Settings::builder().max_expanded_tokens(n).build(),
+        )
+    };
+    assert!(with(11).is_ok());
+    assert!(too_many_tokens(&with(10)));
+    // Built-in macros count too.
+    let builtin = Settings::builder().max_expanded_tokens(0).build();
+    assert!(too_many_tokens(&render_to_string(&ctx, r"a\;b", &builtin)));
+    assert!(render_to_string(&ctx, "a+b", &builtin).is_ok());
+}
+
+#[test]
+fn bad_parameter_numbers_are_errors() {
+    let ctx = KatexContext::default();
+    // These used to index past the arguments and panic.
+    for tex in [
+        r"\def\a#1{#2}\a x",
+        r"\def\a#1{#0}\a x",
+        r"\def\a#1#2{#1#3}\a xy",
+    ] {
+        let result = render_to_string(&ctx, tex, &Settings::default());
+        assert!(
+            matches!(&result, Err(e) if matches!(*e.kind, ParseErrorKind::InvalidMacroArgumentNumber { .. })),
+            "{tex}: {result:?}"
+        );
+    }
+    assert!(render_to_string(&ctx, r"\def\a#1#2{#2#1}\a xy", &Settings::default()).is_ok());
+}

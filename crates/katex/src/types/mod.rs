@@ -28,8 +28,9 @@ pub use tokens::{Token, TokenText};
 
 mod settings;
 pub use settings::{
-    BUILD_LEVELS_PER_NESTING_LEVEL, DEFAULT_MAX_NESTING, OutputFormat, Settings, StrictFunction,
-    StrictMode, StrictReturn, StrictSetting, TrustContext, TrustFunction, TrustSetting,
+    BUILD_LEVELS_PER_NESTING_LEVEL, DEFAULT_MAX_EXPANDED_TOKENS, DEFAULT_MAX_NESTING, OutputFormat,
+    Settings, StrictFunction, StrictMode, StrictReturn, StrictSetting, TrustContext, TrustFunction,
+    TrustSetting,
 };
 
 pub use source_location::SourceRangeRef;

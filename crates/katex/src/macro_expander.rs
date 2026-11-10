@@ -55,6 +55,8 @@ pub const MACRO_DEFINITION_COMMANDS: phf::Set<&str> = phf::phf_set! {
 pub struct MacroExpander<'a> {
     settings: &'a Settings,
     expansion_count: usize,
+    /// Tokens produced by expansion so far; see [`Settings::max_expanded_tokens`].
+    expanded_tokens: usize,
     /// Current nesting depth, shared with the parser; see [`Self::enter_nesting`].
     nesting_depth: usize,
     lexer: Lexer<'a>,
@@ -78,6 +80,7 @@ impl<'a> MacroExpander<'a> {
             lexer: Lexer::new(Arc::from(input), settings),
             settings,
             expansion_count: 0,
+            expanded_tokens: 0,
             nesting_depth: 0,
             macros,
             mode,
@@ -232,6 +235,83 @@ impl<'a> MacroExpander<'a> {
         ))
     }
 
+    /// Adds `count` to the tokens produced by expansion, failing (blaming
+    /// `macro_token`) if that exceeds [`Settings::max_expanded_tokens`].
+    fn count_expanded_tokens(
+        &mut self,
+        count: usize,
+        macro_token: &Token,
+    ) -> Result<(), ParseError> {
+        self.expanded_tokens = self.expanded_tokens.saturating_add(count);
+        if self.expanded_tokens > self.settings.max_expanded_tokens {
+            return Err(ParseError::with_token(
+                ParseErrorKind::TooManyExpandedTokens {
+                    max: self.settings.max_expanded_tokens,
+                },
+                macro_token,
+            ));
+        }
+        Ok(())
+    }
+
+    /// Replaces the placeholders `#1`..`#9` in a macro body with the
+    /// arguments, and `##` with `#`. The body, the arguments and the result
+    /// are in reverse order, like the token stack. Builds the result in one
+    /// pass and counts it against [`Settings::max_expanded_tokens`] before
+    /// copying each argument, so an expansion that copies a long argument
+    /// many times fails before allocating it.
+    fn substitute_args(
+        &mut self,
+        body: &[Token],
+        args: &[Vec<Token>],
+        macro_token: &Token,
+    ) -> Result<Vec<Token>, ParseError> {
+        let mut out: Vec<Token> = Vec::with_capacity(body.len());
+        // Walk the body in reading order (from the end), emitting in reading
+        // order, then reverse.
+        let mut i = body.len();
+        while i > 0 {
+            i -= 1;
+            let tok = &body[i];
+            if tok.text != "#" {
+                self.count_expanded_tokens(1, macro_token)?;
+                out.push(tok.clone());
+                continue;
+            }
+            if i == 0 {
+                return Err(ParseError::with_token(
+                    ParseErrorKind::MacroIncompletePlaceholder,
+                    tok,
+                ));
+            }
+            i -= 1;
+            let next = &body[i];
+            if next.text == "#" {
+                // ## -> #
+                self.count_expanded_tokens(1, macro_token)?;
+                out.push(next.clone());
+                continue;
+            }
+            let arg = (next.text.len() == 1)
+                .then(|| next.text.as_str().parse::<usize>().ok())
+                .flatten()
+                .and_then(|n| n.checked_sub(1))
+                .and_then(|index| args.get(index));
+            let Some(arg) = arg else {
+                return Err(ParseError::with_token(
+                    ParseErrorKind::InvalidMacroArgumentNumber {
+                        value: next.text.to_owned_string(),
+                    },
+                    next,
+                ));
+            };
+            self.count_expanded_tokens(arg.len(), macro_token)?;
+            out.extend(arg.iter().rev().cloned());
+        }
+        out.reverse();
+        Ok(out)
+    }
+
     /// Increment expansion counter and check against max_expand
     fn count_expansion(&mut self, amount: usize) -> Result<(), ParseError> {
         self.expansion_count += amount;
@@ -272,51 +352,15 @@ impl<'a> MacroExpander<'a> {
         };
 
         self.count_expansion(1)?;
-        let mut tokens = expansion.tokens;
+        let tokens = expansion.tokens;
         let args =
             self.consume_args_with_delims(expansion.num_args, expansion.delimiters.as_ref())?;
-        if expansion.num_args > 0 {
-            // Paste arguments in place of placeholders
-            let mut i = (tokens.len() as isize) - 1;
-            while i >= 0 {
-                if tokens[i as usize].text == "#" {
-                    if i == 0 {
-                        return Err(ParseError::with_token(
-                            ParseErrorKind::MacroIncompletePlaceholder,
-                            &tokens[i as usize],
-                        ));
-                    }
-                    let tok = tokens[(i - 1) as usize].clone();
-                    if tok.text == "#" {
-                        // ## -> #
-                        tokens.remove(i as usize);
-                        i -= 2;
-                        continue;
-                    } else if tok.text.len() == 1
-                        && let Ok(parsed) = tok.text.as_str().parse::<usize>()
-                    {
-                        let arg_index = parsed - 1;
-                        // replace placeholder (#n) with arg tokens
-                        // remove the two tokens (# and n) at positions i-1 and
-                        // i
-                        tokens.splice(
-                            (i as usize - 1)..=(i as usize),
-                            args[arg_index].iter().cloned(),
-                        );
-                        i -= 2; // step past inserted
-                        continue;
-                    }
-
-                    return Err(ParseError::with_token(
-                        ParseErrorKind::InvalidMacroArgumentNumber {
-                            value: tok.text.to_owned_string(),
-                        },
-                        &tok,
-                    ));
-                }
-                i -= 1;
-            }
-        }
+        let tokens = if expansion.num_args > 0 {
+            self.substitute_args(&tokens, &args, &top_token)?
+        } else {
+            self.count_expanded_tokens(tokens.len(), &top_token)?;
+            tokens
+        };
         let count = tokens.len();
         self.push_tokens(tokens);
         Ok(Some(count as isize))

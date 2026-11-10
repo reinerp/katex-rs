@@ -97,6 +97,13 @@ pub enum StrictMode {
 /// five times as much.
 pub const DEFAULT_MAX_NESTING: usize = 32;
 
+/// Default for [`Settings::max_expanded_tokens`].
+///
+/// Formulas in an agent-written corpus produce at most about 500 tokens by
+/// expansion (mostly spacing macros such as `\;`); 100,000 tokens take a few
+/// megabytes and a few milliseconds to produce.
+pub const DEFAULT_MAX_EXPANDED_TOKENS: usize = 100_000;
+
 /// Parse-tree levels the builders accept per level of [`Settings::max_nesting`].
 ///
 /// A nesting level can produce more than one parse node level (for example
@@ -202,6 +209,15 @@ pub struct Settings {
     /// macros. KaTeX's own macros (such as `\tag`) and [`Settings::macros`]
     /// keep working. Not a KaTeX setting; defaults to `true` as in KaTeX.
     pub allow_macro_definitions: bool,
+    /// Maximum total number of tokens that macro expansion may produce in one
+    /// render.
+    ///
+    /// [`Settings::max_expand`] counts expansions, but one expansion can copy
+    /// its arguments many times, so a few nested macros can multiply the input
+    /// (`\def\d#1{#1#1#1#1#1#1#1#1}\d{\d{\d{...}}}`). This bounds the
+    /// tokens, and so the memory and time, that expansion adds. Exceeding it
+    /// is a parse error. Not a KaTeX setting.
+    pub max_expanded_tokens: usize,
     /// Whether settings persist globally across render calls.
     ///
     /// When `true`, settings remain active for subsequent expressions.
@@ -248,6 +264,7 @@ impl Settings {
     /// - `max_expand`: `1000`
     /// - `max_nesting`: [`DEFAULT_MAX_NESTING`]
     /// - `allow_macro_definitions`: `true`
+    /// - `max_expanded_tokens`: [`DEFAULT_MAX_EXPANDED_TOKENS`]
     /// - `global_group`: `false`
     #[must_use]
     #[builder]
@@ -283,6 +300,8 @@ impl Settings {
         max_nesting: Option<usize>,
         /// Whether the input may define macros (`\def`, `\newcommand`, ...).
         allow_macro_definitions: Option<bool>,
+        /// Maximum number of tokens produced by macro expansion.
+        max_expanded_tokens: Option<usize>,
         /// Whether settings persist globally across render calls.
         global_group: Option<bool>,
         /// Size multiplier for rendering (scaling factor).
@@ -306,6 +325,7 @@ impl Settings {
             max_expand: max_expand.unwrap_or(1000),
             max_nesting: max_nesting.unwrap_or(DEFAULT_MAX_NESTING),
             allow_macro_definitions: allow_macro_definitions.unwrap_or(true),
+            max_expanded_tokens: max_expanded_tokens.unwrap_or(DEFAULT_MAX_EXPANDED_TOKENS),
             global_group: global_group.unwrap_or(false),
             size_multiplier: size_multiplier.unwrap_or(1.0),
             color,
