@@ -1,7 +1,5 @@
 //! Core KaTeX functionality - main entry points and error handling
 
-#[cfg(feature = "wasm")]
-use crate::types::ParseErrorKind;
 use crate::{
     KatexContext,
     build_common::make_span,
@@ -9,8 +7,8 @@ use crate::{
     dom_tree::{DomSpan, SymbolNode},
     parse_tree::parse_tree,
     parser::parse_node::AnyParseNode,
-    tree::VirtualNode as _,
-    types::{ParseError, Settings},
+    tree::{VirtualNode as _, markup_to_string_with_limit},
+    types::{ParseError, ParseErrorKind, Settings},
 };
 
 fn render_error(
@@ -68,7 +66,15 @@ pub fn render_to_string(
         }
     }?;
 
-    dom_tree.to_markup()
+    match markup_to_string_with_limit(&dom_tree, settings.max_output_size) {
+        Err(e)
+            if !settings.throw_on_error
+                && matches!(*e.kind, ParseErrorKind::OutputTooLarge { .. }) =>
+        {
+            render_error(e, expression, settings)?.to_markup()
+        }
+        result => result,
+    }
 }
 
 /// Parse and build an expression, and place that expression in the DOM node

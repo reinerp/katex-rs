@@ -208,6 +208,19 @@ fn parse_js_options(options: JsValue) -> Result<JsSettings, JsValue> {
         settings.max_expanded_tokens = max_tokens as usize;
     }
 
+    if let Some(max_size) = opt_number("maxOutputSize")? {
+        if !(max_size >= 0.0 && max_size.fract() == 0.0) {
+            return Err(js_error(
+                "option 'maxOutputSize' must be a non-negative integer or Infinity",
+            ));
+        }
+        settings.max_output_size = if max_size.is_finite() {
+            max_size as usize
+        } else {
+            usize::MAX
+        };
+    }
+
     let strict_value = get("strict")?;
     if !strict_value.is_undefined() && !strict_value.is_null() {
         if let Some(strict_bool) = strict_value.as_bool() {

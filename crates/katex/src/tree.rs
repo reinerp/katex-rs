@@ -224,12 +224,28 @@ pub(crate) fn write_tree_markup(
 
 /// Renders the provided [`VirtualNode`] into a [`String`] buffer.
 pub fn markup_to_string<T: VirtualNode + ?Sized>(node: &T) -> Result<String, ParseError> {
+    markup_to_string_with_limit(node, usize::MAX)
+}
+
+/// Renders the provided [`VirtualNode`] into a [`String`] of at most `limit`
+/// bytes, failing with [`ParseErrorKind::OutputTooLarge`] as soon as the markup
+/// would exceed it.
+pub fn markup_to_string_with_limit<T: VirtualNode + ?Sized>(
+    node: &T,
+    limit: usize,
+) -> Result<String, ParseError> {
     struct FormatterWriter<'a> {
         buf: &'a mut String,
+        limit: usize,
+        exceeded: bool,
     }
 
     impl fmt::Write for FormatterWriter<'_> {
         fn write_str(&mut self, s: &str) -> fmt::Result {
+            if s.len() > self.limit - self.buf.len() {
+                self.exceeded = true;
+                return Err(fmt::Error);
+            }
             self.buf.push_str(s);
             Ok(())
         }
@@ -254,13 +270,20 @@ pub fn markup_to_string<T: VirtualNode + ?Sized>(node: &T) -> Result<String, Par
 
     let mut buffer = String::new();
     let error = RefCell::new(None);
-    let mut writer = FormatterWriter { buf: &mut buffer };
+    let mut writer = FormatterWriter {
+        buf: &mut buffer,
+        limit,
+        exceeded: false,
+    };
     let adapter = DisplayAdapter {
         node,
         error: &error,
     };
 
     if fmt::write(&mut writer, format_args!("{adapter}")).is_err() {
+        if writer.exceeded {
+            return Err(ParseErrorKind::OutputTooLarge { max: limit }.into());
+        }
         if let Some(err) = error.into_inner() {
             return Err(err);
         }

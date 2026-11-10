@@ -218,6 +218,14 @@ pub struct Settings {
     /// tokens, and so the memory and time, that expansion adds. Exceeding it
     /// is a parse error. Not a KaTeX setting.
     pub max_expanded_tokens: usize,
+    /// Maximum length in bytes of the markup that
+    /// [`render_to_string`](crate::render_to_string) returns for a formula.
+    ///
+    /// Longer output is a [`ParseErrorKind::OutputTooLarge`] error, rendered as
+    /// an error span (which shows the input) when `throw_on_error` is `false`.
+    /// The functions returning DOM trees do not apply it. Not a KaTeX setting;
+    /// defaults to no limit.
+    pub max_output_size: usize,
     /// Whether settings persist globally across render calls.
     ///
     /// When `true`, settings remain active for subsequent expressions.
@@ -265,6 +273,7 @@ impl Settings {
     /// - `max_nesting`: [`DEFAULT_MAX_NESTING`]
     /// - `allow_macro_definitions`: `true`
     /// - `max_expanded_tokens`: [`DEFAULT_MAX_EXPANDED_TOKENS`]
+    /// - `max_output_size`: `usize::MAX` (no limit)
     /// - `global_group`: `false`
     #[must_use]
     #[builder]
@@ -302,6 +311,8 @@ impl Settings {
         allow_macro_definitions: Option<bool>,
         /// Maximum number of tokens produced by macro expansion.
         max_expanded_tokens: Option<usize>,
+        /// Maximum length in bytes of the rendered markup.
+        max_output_size: Option<usize>,
         /// Whether settings persist globally across render calls.
         global_group: Option<bool>,
         /// Size multiplier for rendering (scaling factor).
@@ -326,6 +337,7 @@ impl Settings {
             max_nesting: max_nesting.unwrap_or(DEFAULT_MAX_NESTING),
             allow_macro_definitions: allow_macro_definitions.unwrap_or(true),
             max_expanded_tokens: max_expanded_tokens.unwrap_or(DEFAULT_MAX_EXPANDED_TOKENS),
+            max_output_size: max_output_size.unwrap_or(usize::MAX),
             global_group: global_group.unwrap_or(false),
             size_multiplier: size_multiplier.unwrap_or(1.0),
             color,

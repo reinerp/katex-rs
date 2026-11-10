@@ -196,6 +196,8 @@ pub enum ParseErrorKind {
     TooDeeplyNested { max: usize },
     #[error("Too many tokens from macro expansion: more than {max} (maxExpandedTokens setting)")]
     TooManyExpandedTokens { max: usize },
+    #[error("Output too large: more than {max} bytes (maxOutputSize setting)")]
+    OutputTooLarge { max: usize },
     #[error("Macro definitions are disabled (allowMacroDefinitions setting): {command}")]
     MacroDefinitionsDisallowed { command: String },
     #[error("Incomplete placeholder at end of macro body")]
