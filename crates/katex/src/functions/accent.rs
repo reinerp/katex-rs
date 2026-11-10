@@ -398,17 +398,18 @@ fn mathml_builder(
 }
 
 /// Read the metrics after font wrappers have been applied.
-fn base_symbol_skew(node: &HtmlDomNode) -> f64 {
-    let children = match node {
-        HtmlDomNode::Symbol(symbol) => return symbol.skew,
-        HtmlDomNode::DomSpan(span) => &span.children,
-        HtmlDomNode::Anchor(anchor) => &anchor.children,
-        HtmlDomNode::Fragment(fragment) => &fragment.children,
-        _ => return 0.0,
-    };
-    if let [child] = children.as_slice() {
-        base_symbol_skew(child)
-    } else {
-        0.0
+const fn base_symbol_skew(mut node: &HtmlDomNode) -> f64 {
+    loop {
+        let children = match node {
+            HtmlDomNode::Symbol(symbol) => return symbol.skew,
+            HtmlDomNode::DomSpan(span) => &span.children,
+            HtmlDomNode::Anchor(anchor) => &anchor.children,
+            HtmlDomNode::Fragment(fragment) => &fragment.children,
+            _ => return 0.0,
+        };
+        let [child] = children.as_slice() else {
+            return 0.0;
+        };
+        node = child;
     }
 }

@@ -289,79 +289,83 @@ impl<'a> Lexer<'a> {
     /// Tokenizes and returns the next token from the current position in the
     /// input string.
     pub fn lex(&mut self) -> Result<Token, ParseError> {
-        // If at end of input, return EOF token
-        if self.last_index >= self.input.len() {
-            return Ok(Token {
-                text: TokenText::Static("EOF"),
-                loc: Some(SourceLocation {
-                    input: Arc::clone(&self.input),
-                    start: self.last_index,
-                    end: self.last_index,
-                }),
-                noexpand: None,
-                treat_as_relax: None,
-            });
-        }
+        // Comments are skipped by looping rather than recursing, so a long run
+        // of comment lines cannot exhaust the native stack.
+        loop {
+            // If at end of input, return EOF token
+            if self.last_index >= self.input.len() {
+                return Ok(Token {
+                    text: TokenText::Static("EOF"),
+                    loc: Some(SourceLocation {
+                        input: Arc::clone(&self.input),
+                        start: self.last_index,
+                        end: self.last_index,
+                    }),
+                    noexpand: None,
+                    treat_as_relax: None,
+                });
+            }
 
-        let slice = &self.input[self.last_index..];
-        let matched = exec(&mut self.last_index, slice);
+            let slice = &self.input[self.last_index..];
+            let matched = exec(&mut self.last_index, slice);
 
-        let token_text = match matched.branch {
-            BranchKind::Unknown => {
-                let ch = &slice[..matched.mlen];
-                let loc = Some(SourceLocation {
+            let token_text = match matched.branch {
+                BranchKind::Unknown => {
+                    let ch = &slice[..matched.mlen];
+                    let loc = Some(SourceLocation {
+                        input: Arc::clone(&self.input),
+                        start: self.last_index - matched.mlen,
+                        end: self.last_index,
+                    });
+                    let token = Token::new(ch.to_owned(), loc);
+                    return Err(ParseError::with_token(
+                        ParseErrorKind::UnexpectedCharacter {
+                            character: ch.to_owned(),
+                        },
+                        &token,
+                    ));
+                }
+                BranchKind::ControlWordWhitespace => TokenText::slice(
+                    Arc::clone(&self.input),
+                    self.last_index - matched.mlen,
+                    self.last_index - matched.skip,
+                ),
+                BranchKind::ControlSymbol
+                | BranchKind::NormalWithAccents
+                | BranchKind::Verb
+                | BranchKind::VerbStar => TokenText::slice(
+                    Arc::clone(&self.input),
+                    self.last_index - matched.mlen,
+                    self.last_index,
+                ),
+                BranchKind::ControlSpace => TokenText::Static(r"\ "),
+                BranchKind::Space => TokenText::Static(" "),
+            };
+
+            if token_text.len() == 1
+                && let Some(first_char) = token_text.as_str().chars().next()
+                && self.get_catcode(first_char) == Some(14)
+            {
+                // Comment character, skip to end of line
+                if let Some(rel_pos) = slice.find('\n') {
+                    let nl_index_global = self.last_index + rel_pos;
+                    self.last_index = nl_index_global;
+                } else {
+                    self.last_index = self.input.len();
+                    self.settings.report_nonstrict("commentAtEnd", "% comment has no terminating newline; LaTeX would fail because of commenting the end of math mode (e.g. $)", None)?;
+                }
+                continue;
+            }
+
+            return Ok(Token::new(
+                token_text,
+                Some(SourceLocation {
                     input: Arc::clone(&self.input),
                     start: self.last_index - matched.mlen,
                     end: self.last_index,
-                });
-                let token = Token::new(ch.to_owned(), loc);
-                return Err(ParseError::with_token(
-                    ParseErrorKind::UnexpectedCharacter {
-                        character: ch.to_owned(),
-                    },
-                    &token,
-                ));
-            }
-            BranchKind::ControlWordWhitespace => TokenText::slice(
-                Arc::clone(&self.input),
-                self.last_index - matched.mlen,
-                self.last_index - matched.skip,
-            ),
-            BranchKind::ControlSymbol
-            | BranchKind::NormalWithAccents
-            | BranchKind::Verb
-            | BranchKind::VerbStar => TokenText::slice(
-                Arc::clone(&self.input),
-                self.last_index - matched.mlen,
-                self.last_index,
-            ),
-            BranchKind::ControlSpace => TokenText::Static(r"\ "),
-            BranchKind::Space => TokenText::Static(" "),
-        };
-
-        if token_text.len() == 1
-            && let Some(first_char) = token_text.as_str().chars().next()
-            && self.get_catcode(first_char) == Some(14)
-        {
-            // Comment character, skip to end of line
-            if let Some(rel_pos) = slice.find('\n') {
-                let nl_index_global = self.last_index + rel_pos;
-                self.last_index = nl_index_global;
-            } else {
-                self.last_index = self.input.len();
-                self.settings.report_nonstrict("commentAtEnd", "% comment has no terminating newline; LaTeX would fail because of commenting the end of math mode (e.g. $)", None)?;
-            }
-            return self.lex();
+                }),
+            ));
         }
-
-        Ok(Token::new(
-            token_text,
-            Some(SourceLocation {
-                input: Arc::clone(&self.input),
-                start: self.last_index - matched.mlen,
-                end: self.last_index,
-            }),
-        ))
     }
 
     /// Returns the current byte position in the input string where the lexer
@@ -380,5 +384,27 @@ impl<'a> Lexer<'a> {
 impl LexerInterface for Lexer<'_> {
     fn input(&self) -> &str {
         &self.input
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::thread::Builder;
+
+    #[test]
+    fn long_runs_of_comment_lines_do_not_recurse() {
+        Builder::new()
+            .stack_size(256 << 10)
+            .spawn(|| {
+                let settings = Settings::default();
+                let input = format!("{}x", "%c\n".repeat(200_000));
+                let mut lexer = Lexer::new(Arc::from(input.as_str()), &settings);
+                assert_eq!(lexer.lex().expect("token").text, "x");
+                assert_eq!(lexer.lex().expect("token").text, "EOF");
+            })
+            .expect("spawn")
+            .join()
+            .expect("lexer overflowed or panicked");
     }
 }

@@ -173,14 +173,15 @@ fn check_partial_group_mut(node: &mut HtmlDomNode) -> Option<&mut Vec<HtmlDomNod
 }
 
 /// Return the outermost node of a domTree.
-fn get_outermost_node(node: &HtmlDomNode, side: Side) -> &HtmlDomNode {
-    if let Some(children) = check_partial_group(node)
-        && !children.is_empty()
-    {
-        if side == Side::Right {
-            return get_outermost_node(&children[children.len() - 1], Side::Right);
+fn get_outermost_node(mut node: &HtmlDomNode, side: Side) -> &HtmlDomNode {
+    while let Some(children) = check_partial_group(node)
+        && let Some(child) = if side == Side::Right {
+            children.last()
+        } else {
+            children.first()
         }
-        return get_outermost_node(&children[0], Side::Left);
+    {
+        node = child;
     }
     node
 }
@@ -223,31 +224,23 @@ pub fn get_type_of_dom_tree(node: &HtmlDomNode, side: Option<Side>) -> Option<Do
 }
 
 fn container_ref_by_path<'a>(
-    nodes: &'a Vec<HtmlDomNode>,
+    mut nodes: &'a Vec<HtmlDomNode>,
     path: &[usize],
 ) -> Option<&'a Vec<HtmlDomNode>> {
-    if path.is_empty() {
-        return Some(nodes);
+    for &index in path {
+        nodes = check_partial_group(nodes.get(index)?)?;
     }
-
-    let (last, rest) = path.split_last()?;
-    let parent = container_ref_by_path(nodes, rest)?;
-    let node = parent.get(*last)?;
-    check_partial_group(node)
+    Some(nodes)
 }
 
 fn container_mut_by_path<'a>(
-    nodes: &'a mut Vec<HtmlDomNode>,
+    mut nodes: &'a mut Vec<HtmlDomNode>,
     path: &[usize],
 ) -> Option<&'a mut Vec<HtmlDomNode>> {
-    if path.is_empty() {
-        return Some(nodes);
+    for &index in path {
+        nodes = check_partial_group_mut(nodes.get_mut(index)?)?;
     }
-
-    let (last, rest) = path.split_last()?;
-    let parent = container_mut_by_path(nodes, rest)?;
-    let node = parent.get_mut(*last)?;
-    check_partial_group_mut(node)
+    Some(nodes)
 }
 
 fn container_len(nodes: &Vec<HtmlDomNode>, path: &[usize]) -> Option<usize> {
@@ -363,19 +356,41 @@ fn insert_into_container<'a>(
     }
 }
 
+/// Finds the last non-space node in `node`'s subtree, descending into partial
+/// groups, and appends its relative path to `path`. Leaves `path` unchanged
+/// and returns false if there is none.
 fn seek_last_nonspace(node: &HtmlDomNode, path: &mut Vec<usize>) -> bool {
-    if let Some(children) = check_partial_group(node) {
-        for idx in (0..children.len()).rev() {
-            path.push(idx);
-            if seek_last_nonspace(&children[idx], path) {
-                return true;
+    let base_len = path.len();
+    // Depth-first, last child first, with an explicit stack of
+    // (partial group's children, number of children not yet visited).
+    let Some(children) = check_partial_group(node) else {
+        return !node.has_class("mspace");
+    };
+    let mut stack = vec![(children, children.len())];
+    while let Some(top) = stack.last_mut() {
+        let children = top.0;
+        if top.1 == 0 {
+            stack.pop();
+            if stack.is_empty() {
+                break;
             }
             path.pop();
+            continue;
         }
-        false
-    } else {
-        !node.has_class("mspace")
+        top.1 -= 1;
+        let idx = top.1;
+        let child = &children[idx];
+        path.push(idx);
+        if let Some(grandchildren) = check_partial_group(child) {
+            stack.push((grandchildren, grandchildren.len()));
+        } else if child.has_class("mspace") {
+            path.pop();
+        } else {
+            return true;
+        }
     }
+    debug_assert_eq!(path.len(), base_len);
+    false
 }
 
 fn find_prev_nonspace_path(nodes: &Vec<HtmlDomNode>, path: &mut Vec<usize>) -> bool {
@@ -1140,4 +1155,66 @@ pub fn build_html(
     }
 
     Ok(span.into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dom_tree::SymbolNode;
+    use crate::tree::DocumentFragment;
+
+    fn sym(text: &str) -> HtmlDomNode {
+        SymbolNode::builder().text(text).build().into()
+    }
+
+    fn space() -> HtmlDomNode {
+        make_span("mspace", vec![], None, None).into()
+    }
+
+    fn group(children: Vec<HtmlDomNode>) -> HtmlDomNode {
+        HtmlDomNode::Fragment(DocumentFragment::new(children))
+    }
+
+    #[test]
+    fn seek_last_nonspace_descends_partial_groups() {
+        // [a, space, [b, [], space], space]
+        let root = group(vec![
+            sym("a"),
+            space(),
+            group(vec![sym("b"), group(vec![]), space()]),
+            space(),
+        ]);
+        let mut path = vec![7];
+        assert!(seek_last_nonspace(&root, &mut path));
+        assert_eq!(path, [7, 2, 0]);
+
+        let only_spaces = group(vec![space(), group(vec![space()]), group(vec![])]);
+        let mut path = vec![1];
+        assert!(!seek_last_nonspace(&only_spaces, &mut path));
+        assert_eq!(path, [1]);
+
+        let mut path = vec![];
+        assert!(!seek_last_nonspace(&space(), &mut path));
+        assert!(seek_last_nonspace(&sym("c"), &mut path));
+        assert_eq!(path, [0usize; 0]);
+    }
+
+    #[test]
+    fn container_paths_and_outermost_nodes() {
+        let nodes = vec![sym("a"), group(vec![sym("b"), group(vec![sym("c")])])];
+        assert_eq!(container_len(&nodes, &[]), Some(2));
+        assert_eq!(container_len(&nodes, &[1]), Some(2));
+        assert_eq!(container_len(&nodes, &[1, 1]), Some(1));
+        assert_eq!(container_len(&nodes, &[0]), None);
+        assert_eq!(container_len(&nodes, &[1, 5]), None);
+        let mut nodes = nodes;
+        assert!(container_mut_by_path(&mut nodes, &[1, 1]).is_some());
+        let outer = group(vec![group(vec![sym("x"), group(vec![sym("y")])])]);
+        assert!(
+            matches!(get_outermost_node(&outer, Side::Right), HtmlDomNode::Symbol(s) if s.text == "y")
+        );
+        assert!(
+            matches!(get_outermost_node(&outer, Side::Left), HtmlDomNode::Symbol(s) if s.text == "x")
+        );
+    }
 }

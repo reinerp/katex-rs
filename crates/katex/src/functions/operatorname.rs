@@ -18,32 +18,24 @@ use crate::types::{ErrorLocationProvider as _, ParseError, ParseErrorKind};
 use crate::{KatexContext, build_html, build_mathml};
 
 fn normalize_symbol_text(node: &mut HtmlDomNode) {
-    match node {
-        HtmlDomNode::Symbol(symbol) => {
-            let replaced = symbol
-                .text
-                .replace('\u{2212}', "-")
-                .replace('\u{2217}', "*");
-            if symbol.text != replaced {
-                symbol.text = replaced;
+    // Explicit stack instead of recursion; the visiting order does not matter.
+    let mut stack = vec![node];
+    while let Some(node) = stack.pop() {
+        match node {
+            HtmlDomNode::Symbol(symbol) => {
+                let replaced = symbol
+                    .text
+                    .replace('\u{2212}', "-")
+                    .replace('\u{2217}', "*");
+                if symbol.text != replaced {
+                    symbol.text = replaced;
+                }
             }
+            HtmlDomNode::DomSpan(span) => stack.extend(&mut span.children),
+            HtmlDomNode::Anchor(anchor) => stack.extend(&mut anchor.children),
+            HtmlDomNode::Fragment(fragment) => stack.extend(&mut fragment.children),
+            _ => {}
         }
-        HtmlDomNode::DomSpan(span) => {
-            for child in &mut span.children {
-                normalize_symbol_text(child);
-            }
-        }
-        HtmlDomNode::Anchor(anchor) => {
-            for child in &mut anchor.children {
-                normalize_symbol_text(child);
-            }
-        }
-        HtmlDomNode::Fragment(fragment) => {
-            for child in &mut fragment.children {
-                normalize_symbol_text(child);
-            }
-        }
-        _ => {}
     }
 }
 

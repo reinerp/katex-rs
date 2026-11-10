@@ -277,23 +277,14 @@ impl AnyParseNode {
     ///
     /// This is equivalent to `utils.getBaseElem` in the JS codebase.
     pub fn to_base_elem(&self) -> Result<&Self, ParseNodeError> {
-        match self {
-            Self::OrdGroup(ord) => {
-                if ord.body.len() == 1 {
-                    ord.body[0].to_base_elem()
-                } else {
-                    Ok(self)
-                }
-            }
-            Self::Color(color) => {
-                if color.body.len() == 1 {
-                    color.body[0].to_base_elem()
-                } else {
-                    Ok(self)
-                }
-            }
-            Self::Font(font) => font.body.to_base_elem(),
-            _ => Ok(self),
+        let mut node = self;
+        loop {
+            node = match node {
+                Self::OrdGroup(ord) if ord.body.len() == 1 => &ord.body[0],
+                Self::Color(color) if color.body.len() == 1 => &color.body[0],
+                Self::Font(font) => &*font.body,
+                _ => return Ok(node),
+            };
         }
     }
 
