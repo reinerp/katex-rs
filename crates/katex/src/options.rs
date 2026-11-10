@@ -6,6 +6,7 @@
 //! different properties when recursing through the parsing process.
 
 use crate::style::TEXT;
+use crate::types::{BUILD_LEVELS_PER_NESTING_LEVEL, ParseError, ParseErrorKind};
 use crate::{
     font_metrics::{FONT_METRICS, FontMetrics},
     style::Style,
@@ -14,7 +15,84 @@ use alloc::borrow::Cow;
 use bon::bon;
 use core::cmp;
 use core::ptr;
+use core::sync::atomic::{AtomicUsize, Ordering};
 use strum::EnumString;
+
+/// Bounds the recursion of the HTML and MathML builders while they build one
+/// tree: at most [`BUILD_LEVELS_PER_NESTING_LEVEL`] times
+/// ([`Settings::max_nesting`](crate::Settings::max_nesting) + 1) group
+/// builders may be active at once.
+///
+/// A clone starts at the original's current depth, so options derived for a
+/// child keep counting from their parent. The counter is atomic only so that
+/// [`Options`] stays `Sync`; a render runs on one thread.
+#[derive(Debug)]
+pub struct BuildDepth {
+    depth: AtomicUsize,
+    max_nesting: usize,
+}
+
+impl BuildDepth {
+    /// A counter at depth 0 for the given [`Settings::max_nesting`](crate::Settings::max_nesting).
+    #[must_use]
+    pub const fn new(max_nesting: usize) -> Self {
+        Self {
+            depth: AtomicUsize::new(0),
+            max_nesting,
+        }
+    }
+
+    /// Enters one builder level, failing if that exceeds the limit. The level
+    /// is left when the returned guard is dropped.
+    pub fn enter(&self) -> Result<BuildDepthGuard<'_>, ParseError> {
+        let depth = self.depth.load(Ordering::Relaxed);
+        // The top level counts as a level too.
+        let limit = self
+            .max_nesting
+            .saturating_add(1)
+            .saturating_mul(BUILD_LEVELS_PER_NESTING_LEVEL);
+        if depth >= limit {
+            return Err(ParseError::new(ParseErrorKind::TooDeeplyNested {
+                max: self.max_nesting,
+            }));
+        }
+        self.depth.store(depth + 1, Ordering::Relaxed);
+        Ok(BuildDepthGuard(self))
+    }
+}
+
+impl Default for BuildDepth {
+    /// No limit.
+    fn default() -> Self {
+        Self::new(usize::MAX)
+    }
+}
+
+impl Clone for BuildDepth {
+    fn clone(&self) -> Self {
+        Self {
+            depth: AtomicUsize::new(self.depth.load(Ordering::Relaxed)),
+            max_nesting: self.max_nesting,
+        }
+    }
+}
+
+impl PartialEq for BuildDepth {
+    /// Depth bookkeeping is not part of the value of [`Options`].
+    fn eq(&self, _other: &Self) -> bool {
+        true
+    }
+}
+
+/// Leaves a level entered with [`BuildDepth::enter`] when dropped.
+#[derive(Debug)]
+pub struct BuildDepthGuard<'a>(&'a BuildDepth);
+
+impl Drop for BuildDepthGuard<'_> {
+    fn drop(&mut self) {
+        self.0.depth.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 /// Font weight options
 #[derive(Debug, Clone, PartialEq, Eq, EnumString)]
@@ -130,6 +208,8 @@ pub struct Options {
     pub max_size: f64,
     /// Minimum rule thickness
     pub min_rule_thickness: f64,
+    /// Recursion depth of the group builders
+    pub build_depth: BuildDepth,
 }
 
 #[bon]
@@ -165,6 +245,7 @@ impl Options {
             size_multiplier,
             max_size,
             min_rule_thickness,
+            build_depth: BuildDepth::default(),
         }
     }
 }
@@ -184,6 +265,7 @@ impl Default for Options {
             size_multiplier: SIZE_MULTIPLIERS[Self::BASESIZE - 1],
             max_size: 1000.0,
             min_rule_thickness: 0.04,
+            build_depth: BuildDepth::default(),
         }
     }
 }

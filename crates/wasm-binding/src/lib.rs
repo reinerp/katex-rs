@@ -186,6 +186,15 @@ fn parse_js_options(options: JsValue) -> Result<JsSettings, JsValue> {
         settings.max_expand = max_expand as usize;
     }
 
+    if let Some(max_nesting) = opt_number("maxNesting")? {
+        if !(max_nesting.is_finite() && max_nesting >= 0.0 && max_nesting.fract() == 0.0) {
+            return Err(js_error(
+                "option 'maxNesting' must be a finite non-negative integer",
+            ));
+        }
+        settings.max_nesting = max_nesting as usize;
+    }
+
     let strict_value = get("strict")?;
     if !strict_value.is_undefined() && !strict_value.is_null() {
         if let Some(strict_bool) = strict_value.as_bool() {

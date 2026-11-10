@@ -8,7 +8,9 @@ use crate::lexer::Lexer;
 use crate::macros::builtins::BUILTIN_MACROS;
 use crate::namespace::{KeyMap, Namespace};
 use crate::types::TokenText;
-use crate::types::{Mode, ParseError, ParseErrorKind, Settings, SourceLocation, Token};
+use crate::types::{
+    ErrorLocationProvider, Mode, ParseError, ParseErrorKind, Settings, SourceLocation, Token,
+};
 use alloc::sync::Arc;
 
 use crate::macros::{
@@ -31,6 +33,8 @@ pub const IMPLICIT_COMMANDS: phf::Set<&str> = phf::phf_set! {
 pub struct MacroExpander<'a> {
     settings: &'a Settings,
     expansion_count: usize,
+    /// Current nesting depth, shared with the parser; see [`Self::enter_nesting`].
+    nesting_depth: usize,
     lexer: Lexer<'a>,
     macros: Namespace<'a, MacroDefinition>,
     stack: Vec<Token>, // tokens in REVERSE order
@@ -52,6 +56,7 @@ impl<'a> MacroExpander<'a> {
             lexer: Lexer::new(Arc::from(input), settings),
             settings,
             expansion_count: 0,
+            nesting_depth: 0,
             macros,
             mode,
             stack: Vec::new(),
@@ -159,6 +164,29 @@ impl<'a> MacroExpander<'a> {
         Ok(args)
     }
 
+    /// Enters one level of nesting: a group, command or environment being
+    /// parsed, or a call of a function macro (which may expand further macros
+    /// recursively). Fails, blaming `at`, if that would exceed
+    /// [`Settings::max_nesting`]. Each successful call must be paired with
+    /// [`Self::exit_nesting`].
+    pub fn enter_nesting(&mut self, at: &dyn ErrorLocationProvider) -> Result<(), ParseError> {
+        if self.nesting_depth >= self.settings.max_nesting {
+            return Err(ParseError::with_token(
+                ParseErrorKind::TooDeeplyNested {
+                    max: self.settings.max_nesting,
+                },
+                at,
+            ));
+        }
+        self.nesting_depth += 1;
+        Ok(())
+    }
+
+    /// Leaves a level entered with [`Self::enter_nesting`].
+    pub const fn exit_nesting(&mut self) {
+        self.nesting_depth = self.nesting_depth.saturating_sub(1);
+    }
+
     /// Increment expansion counter and check against max_expand
     fn count_expansion(&mut self, amount: usize) -> Result<(), ParseError> {
         self.expansion_count += amount;
@@ -175,7 +203,7 @@ impl<'a> MacroExpander<'a> {
         let expansion = if top_token.noexpand == Some(true) {
             None
         } else {
-            self.get_expansion(name)?
+            self.get_expansion(&top_token)?
         };
 
         let expansion = match expansion {
@@ -274,7 +302,8 @@ impl<'a> MacroExpander<'a> {
 
     /// Compute expansion for a name. Errors raised by function macros (for
     /// example `\newcommand` redefining a command) propagate, as in KaTeX.
-    fn get_expansion(&mut self, name: &str) -> Result<Option<MacroExpansion>, ParseError> {
+    fn get_expansion(&mut self, token: &Token) -> Result<Option<MacroExpansion>, ParseError> {
+        let name = token.text.as_str();
         // If single character has a catcode other than 13 (active), don't
         // expand it
         if name.chars().count() == 1
@@ -289,9 +318,21 @@ impl<'a> MacroExpander<'a> {
             return Ok(None);
         };
 
+        // Function macros may expand further macros (for example
+        // \expandafter), recursing, so each call counts as a nesting level.
         let result = match definition {
-            MacroDefinition::Function(f) => f(self as &mut dyn MacroContextInterface)?,
-            MacroDefinition::StaticFunction(f) => f(self as &mut dyn MacroContextInterface)?,
+            MacroDefinition::Function(f) => {
+                self.enter_nesting(token)?;
+                let result = f(self as &mut dyn MacroContextInterface);
+                self.exit_nesting();
+                result?
+            }
+            MacroDefinition::StaticFunction(f) => {
+                self.enter_nesting(token)?;
+                let result = f(self as &mut dyn MacroContextInterface);
+                self.exit_nesting();
+                result?
+            }
             MacroDefinition::StaticStr(s) => return Ok(Some(self.string_to_expansion(s))),
             MacroDefinition::String(s) => return Ok(Some(self.string_to_expansion(&s))),
             MacroDefinition::Expansion(e) => return Ok(Some(e)),

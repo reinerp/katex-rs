@@ -504,6 +504,8 @@ pub fn build_group(
     group: &AnyParseNode,
     options: &Options,
 ) -> Result<MathDomNode, ParseError> {
+    // Builders recurse through here once per level of the parse tree.
+    let _depth = options.build_depth.enter()?;
     let group_type = group.discriminant();
     ctx.mathml_group_builders.get(&group_type).map_or_else(
         || {

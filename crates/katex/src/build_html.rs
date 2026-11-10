@@ -927,6 +927,9 @@ pub fn build_group(
     options: &Options,
     base_options: Option<&Options>,
 ) -> Result<HtmlDomNode, ParseError> {
+    // Builders recurse through here once per level of the parse tree.
+    let _depth = options.build_depth.enter()?;
+
     // Get the group type string to lookup the builder
     let group_type = group.discriminant();
 
@@ -1216,5 +1219,57 @@ mod tests {
         assert!(
             matches!(get_outermost_node(&outer, Side::Left), HtmlDomNode::Symbol(s) if s.text == "x")
         );
+    }
+}
+
+#[cfg(test)]
+mod depth_tests {
+    use super::*;
+    use crate::build_mathml::build_mathml;
+    use crate::options::BuildDepth;
+    use crate::parser::parse_node::ParseNodeOrdGroup;
+    use crate::types::Mode;
+
+    fn ordgroups(depth: usize) -> AnyParseNode {
+        let mut node = AnyParseNode::OrdGroup(ParseNodeOrdGroup {
+            mode: Mode::Math,
+            loc: None,
+            body: vec![],
+            semisimple: None,
+        });
+        for _ in 0..depth {
+            node = AnyParseNode::OrdGroup(ParseNodeOrdGroup {
+                mode: Mode::Math,
+                loc: None,
+                body: vec![node],
+                semisimple: None,
+            });
+        }
+        node
+    }
+
+    #[test]
+    fn builders_stop_at_the_depth_limit() {
+        let ctx = KatexContext::default();
+        let options = Options {
+            build_depth: BuildDepth::new(10),
+            ..Options::default()
+        };
+        // (10 + 1) * 4 = 44 builder levels.
+        let deep = [ordgroups(44)];
+        let html = build_html(&ctx, &deep, &options).expect_err("too deep");
+        assert!(matches!(
+            *html.kind,
+            ParseErrorKind::TooDeeplyNested { max: 10 }
+        ));
+        let mathml = build_mathml(&ctx, &deep, "", &options, false, false).expect_err("too deep");
+        assert!(matches!(
+            *mathml.kind,
+            ParseErrorKind::TooDeeplyNested { max: 10 }
+        ));
+        // The levels entered before the error were left again.
+        let fits = [ordgroups(43)];
+        assert!(build_html(&ctx, &fits, &options).is_ok());
+        assert!(build_mathml(&ctx, &fits, "", &options, false, false).is_ok());
     }
 }

@@ -88,6 +88,21 @@ pub enum StrictMode {
     Error,
 }
 
+/// Default for [`Settings::max_nesting`].
+///
+/// Formulas written by people rarely need more than about 6 levels. In an
+/// optimized x86-64 build one level costs at most about 19 KiB of stack
+/// (`\stackrel`, `\overset` and `\underset`, mostly in the HTML builder), so
+/// a render at this limit needs about 0.65 MiB. Unoptimized builds use about
+/// five times as much.
+pub const DEFAULT_MAX_NESTING: usize = 32;
+
+/// Parse-tree levels the builders accept per level of [`Settings::max_nesting`].
+///
+/// A nesting level can produce more than one parse node level (for example
+/// `x^{...}` is a `supsub` node holding an `ordgroup`).
+pub const BUILD_LEVELS_PER_NESTING_LEVEL: usize = 4;
+
 /// Core settings structure for KaTeX rendering configuration.
 ///
 /// This struct contains all resolved configuration options that control
@@ -168,6 +183,16 @@ pub struct Settings {
     ///
     /// Prevents infinite loops in macro expansion.
     pub max_expand: usize,
+    /// Maximum nesting depth: of groups, commands and environments while
+    /// parsing (each `{...}`, command or `\begin` counts one level, as do
+    /// nested calls of built-in function macros), and of parse nodes while
+    /// building the HTML and MathML trees (up to
+    /// [`BUILD_LEVELS_PER_NESTING_LEVEL`] times one more than this).
+    ///
+    /// Parsing and building recurse once per level, so this bounds the native
+    /// stack a render uses; exceeding it is a parse error. Not a KaTeX
+    /// setting: KaTeX relies on JavaScript's own recursion limit.
+    pub max_nesting: usize,
     /// Whether settings persist globally across render calls.
     ///
     /// When `true`, settings remain active for subsequent expressions.
@@ -212,6 +237,7 @@ impl Settings {
     /// - `trust`: TrustSetting::Bool(false)
     /// - `max_size`: `f64::INFINITY`
     /// - `max_expand`: `1000`
+    /// - `max_nesting`: [`DEFAULT_MAX_NESTING`]
     /// - `global_group`: `false`
     #[must_use]
     #[builder]
@@ -243,6 +269,8 @@ impl Settings {
         max_size: Option<f64>,
         /// Maximum macro expansion iterations.
         max_expand: Option<usize>,
+        /// Maximum nesting depth of groups, commands and environments.
+        max_nesting: Option<usize>,
         /// Whether settings persist globally across render calls.
         global_group: Option<bool>,
         /// Size multiplier for rendering (scaling factor).
@@ -264,6 +292,7 @@ impl Settings {
             trust: trust.unwrap_or_default(),
             max_size: max_size.unwrap_or(f64::INFINITY).max(0.0),
             max_expand: max_expand.unwrap_or(1000),
+            max_nesting: max_nesting.unwrap_or(DEFAULT_MAX_NESTING),
             global_group: global_group.unwrap_or(false),
             size_multiplier: size_multiplier.unwrap_or(1.0),
             color,

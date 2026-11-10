@@ -8,7 +8,7 @@ use crate::build_html::build_html;
 use crate::build_mathml::build_mathml;
 use crate::context::KatexContext;
 use crate::dom_tree::DomSpan;
-use crate::options::{FontShape, FontWeight, Options};
+use crate::options::{BuildDepth, FontShape, FontWeight, Options};
 use crate::parser::parse_node::AnyParseNode;
 use crate::style;
 use crate::types::{OutputFormat, ParseError, Settings};
@@ -35,6 +35,7 @@ fn options_from_settings(settings: &Settings) -> Options {
         size_multiplier: settings.size_multiplier,
         max_size: settings.max_size,
         min_rule_thickness: settings.min_rule_thickness,
+        build_depth: BuildDepth::new(settings.max_nesting),
     }
 }
 

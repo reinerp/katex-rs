@@ -414,6 +414,7 @@ pub use crate::types::OutputFormat;
 /// - `error_color`: `"#cc0000"` (red)
 /// - `max_size`: `f64::INFINITY`
 /// - `max_expand`: `1000`
+/// - `max_nesting`: [`types::DEFAULT_MAX_NESTING`]
 /// - Other fields have appropriate defaults
 ///
 /// # Performance Considerations

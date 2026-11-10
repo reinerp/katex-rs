@@ -1257,8 +1257,11 @@ impl<'a> Parser<'a> {
                 BreakToken::EndGroup
             };
 
+            self.gullet.enter_nesting(&first_token)?;
             self.gullet.begin_group();
-            let expression = self.parse_expression(false, Some(&break_token))?;
+            let expression = self.parse_expression(false, Some(&break_token));
+            self.gullet.exit_nesting();
+            let expression = expression?;
             let last_loc = self.fetch()?.loc().cloned();
             self.expect(break_token.as_ref(), true)?;
             self.gullet.end_group()?;
@@ -1370,10 +1373,16 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        let (args, opt_args) = self.parse_arguments(func_name, func_data.as_ref())?;
-        let node =
-            self.call_function(func_name, args, opt_args, Some(&token), break_on_token_text)?;
-        Ok(Some(node))
+        // A command and everything parsed for it (its arguments, or the rest
+        // of the expression for commands like \color) is one nesting level.
+        self.gullet.enter_nesting(&token)?;
+        let node = self
+            .parse_arguments(func_name, func_data.as_ref())
+            .and_then(|(args, opt_args)| {
+                self.call_function(func_name, args, opt_args, Some(&token), break_on_token_text)
+            });
+        self.gullet.exit_nesting();
+        node.map(Some)
     }
 
     /// Parse symbol at current token

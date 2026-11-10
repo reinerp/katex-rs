@@ -12,5 +12,11 @@ slow-timeout = { period = "500ms", terminate-after = 4 }
 filter = 'binary_id(katex-rs::upstream_spec) & test(pinned_upstream_rendering)'
 slow-timeout = { period = "2s", terminate-after = 5 }
 
+# These render every command and environment nested past the depth limit, on
+# threads with bounded stacks.
+[[profile.default.overrides]]
+filter = 'binary_id(katex-rs::nesting_spec)'
+slow-timeout = { period = "5s", terminate-after = 4 }
+
 [profile.ci.junit]  # this can be some other profile, too
 path = "junit.xml"

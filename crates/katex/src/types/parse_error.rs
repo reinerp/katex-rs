@@ -192,6 +192,8 @@ pub enum ParseErrorKind {
     MacroDelimiterLengthMismatch,
     #[error("Too many expansions: infinite loop or need to increase maxExpand setting")]
     MacroTooManyExpansions,
+    #[error("Too deeply nested: more than {max} levels (maxNesting setting)")]
+    TooDeeplyNested { max: usize },
     #[error("Incomplete placeholder at end of macro body")]
     MacroIncompletePlaceholder,
     #[error("Internal error: stack unexpectedly empty during token expansion")]
