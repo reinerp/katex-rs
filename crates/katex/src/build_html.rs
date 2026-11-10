@@ -13,6 +13,7 @@ use crate::types::{CssProperty, ParseError, ParseErrorKind};
 use crate::units::make_em;
 use crate::{KatexContext, build_common};
 use alloc::borrow::Cow;
+use core::mem;
 use core::str::FromStr as _;
 use phf::phf_set;
 use strum::{EnumString, IntoDiscriminant as _};
@@ -339,23 +340,6 @@ fn two_nodes_mut_by_path<'a>(
     two_nodes_mut_in_container(container, &left[prefix_len..], &right[prefix_len..])
 }
 
-fn insert_into_container<'a>(
-    nodes: &mut Vec<HtmlDomNode>,
-    parent_path: &'a [usize],
-    index: usize,
-    node: HtmlDomNode,
-) -> (&'a [usize], usize) {
-    if let Some(container) = container_mut_by_path(nodes, parent_path) {
-        let insert_index = index.min(container.len());
-        container.insert(insert_index, node);
-        (parent_path, insert_index)
-    } else {
-        let insert_index = index.min(nodes.len());
-        nodes.insert(insert_index, node);
-        (&[], insert_index)
-    }
-}
-
 /// Finds the last non-space node in `node`'s subtree, descending into partial
 /// groups, and appends its relative path to `path`. Leaves `path` unchanged
 /// and returns false if there is none.
@@ -419,18 +403,6 @@ impl NodePath {
     #[inline]
     fn as_slice(&self) -> &[usize] {
         &self.0
-    }
-
-    fn adjust_for_insert(&mut self, parent_path: &[usize], index: usize) {
-        if self.0.len() < parent_path.len() + 1 {
-            return;
-        }
-        if &self.0[..parent_path.len()] == parent_path {
-            let slot = parent_path.len();
-            if self.0[slot] >= index {
-                self.0[slot] += 1;
-            }
-        }
     }
 }
 
@@ -510,20 +482,6 @@ impl PrevTracker {
             _ => None,
         }
     }
-
-    fn adjust_for_insert(&mut self, parent_path: &[usize], index: usize) {
-        if let PrevNodeState::Located(path) = &mut self.state {
-            path.adjust_for_insert(parent_path, index);
-        }
-    }
-
-    fn adjust_for_insert_self(&mut self, index: usize, slot: usize) {
-        if let PrevNodeState::Located(path) = &mut self.state
-            && path.0[slot] >= index
-        {
-            path.0[slot] += 1;
-        }
-    }
 }
 
 #[derive(Clone, Default)]
@@ -532,23 +490,56 @@ struct TraverseFrame {
     index: usize,
 }
 
-fn adjust_frame_paths(frames: &mut [TraverseFrame], parent_path: &[usize], index: usize) {
-    for frame in frames.iter_mut() {
-        if frame.path == parent_path {
-            if frame.index >= index {
-                frame.index += 1;
-            }
+/// A node to insert into the container at `path`, before the node that was
+/// at `index` when the traversal began. `seq` is the recording order.
+struct PendingInsert {
+    path: Vec<usize>,
+    index: usize,
+    seq: usize,
+    node: HtmlDomNode,
+}
+
+/// Applies the insertions recorded during a traversal, rebuilding each
+/// affected container once instead of shifting it on every insertion (which
+/// was quadratic in the number of atoms).
+///
+/// Paths and indices refer to the tree as it was before any insertion. At
+/// equal indices, later recordings go first: that is where inserting each
+/// node immediately at its adjusted index would have put it.
+fn apply_pending_inserts(root: &mut Vec<HtmlDomNode>, mut pending: Vec<PendingInsert>) {
+    // Deeper containers first: inserting into a container shifts only its own
+    // children, so the original paths of deeper containers stay valid until
+    // their ancestors are rebuilt.
+    pending.sort_unstable_by(|a, b| {
+        b.path
+            .len()
+            .cmp(&a.path.len())
+            .then_with(|| a.path.cmp(&b.path))
+            .then_with(|| a.index.cmp(&b.index))
+            .then_with(|| b.seq.cmp(&a.seq))
+    });
+    let mut pending = pending.into_iter().peekable();
+    while let Some(first) = pending.next() {
+        let path = first.path;
+        let mut inserts = vec![(first.index, first.node)];
+        while let Some(more) = pending.next_if(|p| p.path == path) {
+            inserts.push((more.index, more.node));
+        }
+        let Some(container) = container_mut_by_path(root, &path) else {
+            // Unreachable: paths are checked when recorded.
             continue;
-        }
-        if frame.path.len() < parent_path.len() + 1 {
-            continue;
-        }
-        if frame.path[..parent_path.len()] == parent_path[..] {
-            let slot = parent_path.len();
-            if frame.path[slot] >= index {
-                frame.path[slot] += 1;
+        };
+        let old = mem::take(container);
+        let mut rebuilt = Vec::with_capacity(old.len() + inserts.len());
+        let mut inserts = inserts.into_iter().peekable();
+        for (i, child) in old.into_iter().enumerate() {
+            while let Some((_, node)) = inserts.next_if(|(index, _)| *index <= i) {
+                rebuilt.push(node);
             }
+            rebuilt.push(child);
         }
+        rebuilt.extend(inserts.map(|(_, node)| node));
+        *container = rebuilt;
     }
 }
 
@@ -570,6 +561,7 @@ where
     ) -> Result<Option<HtmlDomNode>, ParseError>,
 {
     let mut frames = vec![TraverseFrame::default()];
+    let mut pending: Vec<PendingInsert> = Vec::new();
 
     let appended_next = next.take().is_some_and(|next_node| {
         root.push(next_node);
@@ -622,56 +614,35 @@ where
             !node_ref.has_class("mspace")
         };
 
-        let mut skip_inserted = 0usize;
-
         if nonspace {
             let result =
                 prev.with_prev_and_current(root, dummy_prev, &current_path, &|node, prev_node| {
                     callback(ctx, node, prev_node)
                 })?;
 
-            if let Some(new_node) = result {
-                if let Some(prev_path) = prev.prev_path() {
-                    if let Some((last, parent)) = prev_path.split_last() {
-                        let inserted_pos = *last + 1;
-                        let container_path_slice = &current_path[..container_path_len];
-                        let (actual_path, actual_index) =
-                            insert_into_container(root, parent, inserted_pos, new_node);
-                        let same_container = actual_path == container_path_slice;
-                        adjust_frame_paths(&mut frames, actual_path, actual_index);
-                        prev.adjust_for_insert_self(actual_index, actual_path.len());
-                        if same_container && actual_index <= current_index {
-                            skip_inserted += 1;
-                        }
-                    } else {
-                        let container_path_slice = &current_path[..container_path_len];
-                        let (actual_path, actual_index) =
-                            insert_into_container(root, container_path_slice, 0, new_node);
-                        let same_container = actual_path == container_path_slice;
-                        adjust_frame_paths(&mut frames, actual_path, actual_index);
-                        prev.adjust_for_insert(actual_path, actual_index);
-                        if same_container && actual_index <= current_index {
-                            skip_inserted += 1;
-                        }
-                    }
+            if let Some(node) = result {
+                // Insert after the previous non-space node, or at the front
+                // of the current container if there is none. The traversal
+                // never needs to see the inserted node: it is glue (an
+                // mspace), which both the walk and the backward search for
+                // the previous node skip. So record it and insert later.
+                let (path, index) = match prev.prev_path().and_then(<[usize]>::split_last) {
+                    Some((last, parent)) => (parent.to_vec(), *last + 1),
+                    None => (current_path[..container_path_len].to_vec(), 0),
+                };
+                let (path, index) = if container_len(root, &path).is_some() {
+                    (path, index)
                 } else {
-                    let container_path_slice = &current_path[..container_path_len];
-                    let (actual_path, actual_index) =
-                        insert_into_container(root, container_path_slice, 0, new_node);
-                    let same_container = actual_path == container_path_slice;
-                    adjust_frame_paths(&mut frames, actual_path, actual_index);
-                    prev.adjust_for_insert(actual_path, actual_index);
-                    if same_container && actual_index <= current_index {
-                        skip_inserted += 1;
-                    }
-                }
+                    (Vec::new(), index.min(root.len()))
+                };
+                let seq = pending.len();
+                pending.push(PendingInsert {
+                    path,
+                    index,
+                    seq,
+                    node,
+                });
             }
-        }
-
-        if skip_inserted > 0
-            && let Some(last) = current_path.last_mut()
-        {
-            *last += skip_inserted;
         }
 
         if !nonspace && is_root {
@@ -688,8 +659,10 @@ where
             prev.set_located(NodePath::new(current_path));
         }
 
-        frames[frame_index].index = current_index + 1 + skip_inserted;
+        frames[frame_index].index = current_index + 1;
     }
+
+    apply_pending_inserts(root, pending);
 
     if appended_next && let Some(next_node) = root.pop() {
         *next = Some(next_node);
