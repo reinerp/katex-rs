@@ -8,7 +8,7 @@
 use crate::ParseError;
 #[cfg(feature = "wasm")]
 use crate::dom_tree::create_class;
-use crate::tree::{DocumentFragment, VirtualNode};
+use crate::tree::{DocumentFragment, MarkupStep, VirtualNode, write_tree_markup};
 use crate::units::make_em;
 use crate::utils::escape_into;
 #[cfg(feature = "wasm")]
@@ -241,14 +241,11 @@ impl MathNode {
     {
         self.attributes.insert(key.into(), value.into());
     }
-
-    fn to_text(&self) -> String {
-        self.children.iter().map(MathDomNode::to_text).collect()
-    }
 }
 
-impl VirtualNode for MathNode {
-    fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
+impl MathNode {
+    /// Writes the opening tag, with classes and attributes.
+    pub(crate) fn write_open_tag(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
         map_fmt(write!(fmt, "<{}", self.node_type.as_ref()))?;
 
         if !self.classes.is_empty() {
@@ -270,14 +267,13 @@ impl VirtualNode for MathNode {
             map_fmt(fmt.write_char('"'))?;
         }
 
-        map_fmt(fmt.write_char('>'))?;
+        map_fmt(fmt.write_char('>'))
+    }
+}
 
-        for child in &self.children {
-            child.write_markup(fmt)?;
-        }
-
-        map_fmt(write!(fmt, "</{}>", self.node_type.as_ref()))?;
-        Ok(())
+impl VirtualNode for MathNode {
+    fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
+        write_tree_markup(MarkupStep::MathNode(self), fmt)
     }
 
     #[cfg(feature = "wasm")]
@@ -336,12 +332,6 @@ pub struct TextNode {
     pub text: String,
 }
 
-impl TextNode {
-    fn to_text(&self) -> String {
-        self.text.clone()
-    }
-}
-
 impl VirtualNode for TextNode {
     fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
         map_fmt(escape_into(fmt, &self.text))?;
@@ -371,10 +361,6 @@ impl SpaceNode {
     pub fn new(width: f64) -> Self {
         let character = get_space_character(width);
         Self { width, character }
-    }
-
-    fn to_text(&self) -> String {
-        self.character.clone().unwrap_or_else(|| " ".to_owned())
     }
 }
 
@@ -414,24 +400,26 @@ impl VirtualNode for SpaceNode {
 
 impl MathDomNode {
     /// Convert the MathDomNode to plain text
+    #[must_use]
     pub fn to_text(&self) -> String {
-        match self {
-            Self::Math(node) => node.to_text(),
-            Self::Text(node) => node.to_text(),
-            Self::Space(node) => node.to_text(),
-            Self::Fragment(fragment) => fragment.children.iter().map(Self::to_text).collect(),
+        // Iterative pre-order walk, so that tree depth does not consume native stack.
+        let mut text = String::new();
+        let mut stack = vec![self];
+        while let Some(node) = stack.pop() {
+            match node {
+                Self::Math(node) => stack.extend(node.children.iter().rev()),
+                Self::Text(node) => text.push_str(&node.text),
+                Self::Space(node) => text.push_str(node.character.as_deref().unwrap_or(" ")),
+                Self::Fragment(fragment) => stack.extend(fragment.children.iter().rev()),
+            }
         }
+        text
     }
 }
 
 impl VirtualNode for MathDomNode {
     fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
-        match self {
-            Self::Math(node) => node.write_markup(fmt),
-            Self::Text(node) => node.write_markup(fmt),
-            Self::Space(node) => node.write_markup(fmt),
-            Self::Fragment(fragment) => fragment.write_markup(fmt),
-        }
+        write_tree_markup(MarkupStep::Math(self), fmt)
     }
 
     #[cfg(feature = "wasm")]

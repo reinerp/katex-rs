@@ -21,7 +21,7 @@ use web_sys;
 use crate::mathml_tree::MathNode;
 use crate::options::Options;
 use crate::svg_geometry::PATH_MAP;
-use crate::tree::{DocumentFragment, VirtualNode};
+use crate::tree::{DocumentFragment, MarkupStep, VirtualNode, write_tree_markup};
 use crate::types::ClassList;
 use crate::types::{CssProperty, CssStyle};
 use crate::unicode::script_from_codepoint;
@@ -505,6 +505,22 @@ fn map_fmt(result: fmt::Result) -> Result<(), ParseError> {
     result.map_err(ParseError::from)
 }
 
+/// Writes `<tag class=".." style=".." attr="..">` for an element with children.
+pub(crate) fn write_open_tag<W: fmt::Write>(
+    writer: &mut W,
+    tag: &str,
+    classes: &ClassList,
+    style: &CssStyle,
+    attributes: &KeyMap<String, String>,
+) -> Result<(), ParseError> {
+    map_fmt(writer.write_char('<'))?;
+    map_fmt(writer.write_str(tag))?;
+    map_fmt(write_node_class(writer, classes))?;
+    map_fmt(write_node_style(writer, style))?;
+    node_attributes_to_markup(writer, attributes)?;
+    map_fmt(writer.write_char('>'))
+}
+
 fn write_node_class<W: fmt::Write>(writer: &mut W, classes: &ClassList) -> fmt::Result {
     let mut iter = classes.into_iter();
     if let Some(first) = iter.next() {
@@ -572,11 +588,7 @@ fn create_element_ns(ctx: &WebContext, ns: &str, name: &str) -> web_sys::Element
 /// Implement VirtualNode for `Span<T>`
 impl<T: VirtualNode> VirtualNode for Span<T> {
     fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
-        map_fmt(fmt.write_str("<span"))?;
-        map_fmt(write_node_class(fmt, &self.classes))?;
-        map_fmt(write_node_style(fmt, &self.style))?;
-        node_attributes_to_markup(fmt, &self.attributes)?;
-        map_fmt(fmt.write_char('>'))?;
+        write_open_tag(fmt, "span", &self.classes, &self.style, &self.attributes)?;
 
         for child in &self.children {
             child.write_markup(fmt)?;
@@ -614,11 +626,7 @@ impl<T: VirtualNode> VirtualNode for Span<T> {
 /// Implement VirtualNode for Anchor
 impl VirtualNode for Anchor {
     fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
-        map_fmt(fmt.write_str("<a"))?;
-        map_fmt(write_node_class(fmt, &self.classes))?;
-        map_fmt(write_node_style(fmt, &self.style))?;
-        node_attributes_to_markup(fmt, &self.attributes)?;
-        map_fmt(fmt.write_char('>'))?;
+        write_open_tag(fmt, "a", &self.classes, &self.style, &self.attributes)?;
 
         for child in &self.children {
             child.write_markup(fmt)?;
@@ -809,15 +817,8 @@ impl VirtualNode for SvgNode {
 /// Implement VirtualNode for HtmlDomNode
 impl VirtualNode for HtmlDomNode {
     fn write_markup(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), ParseError> {
-        match self {
-            Self::DomSpan(span) => span.write_markup(fmt),
-            Self::Anchor(anchor) => anchor.write_markup(fmt),
-            Self::Img(img) => img.write_markup(fmt),
-            Self::Symbol(symbol) => symbol.write_markup(fmt),
-            Self::SvgNode(svg_node) => svg_node.write_markup(fmt),
-            Self::MathML(math_node) => math_node.write_markup(fmt),
-            Self::Fragment(fragment) => fragment.write_markup(fmt),
-        }
+        // Iterative, so that serialization depth does not consume native stack.
+        write_tree_markup(MarkupStep::Html(self), fmt)
     }
 
     #[cfg(feature = "wasm")]

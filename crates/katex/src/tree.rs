@@ -4,7 +4,7 @@
 //! including the base VirtualNode trait and DocumentFragment structure.
 
 use core::cell::RefCell;
-use core::fmt;
+use core::fmt::{self, Write as _};
 
 use crate::ClassList;
 use crate::ParseError;
@@ -153,6 +153,75 @@ impl<ChildType: VirtualNode + Clone + 'static> VirtualNode for DocumentFragment<
 pub use crate::dom_tree::HtmlDomNode;
 pub use crate::mathml_tree::MathDomNode;
 
+use crate::dom_tree::write_open_tag;
+use crate::mathml_tree::MathNode;
+
+/// A pending step of [`write_tree_markup`].
+pub(crate) enum MarkupStep<'a> {
+    /// Write an HTML node and its subtree.
+    Html(&'a HtmlDomNode),
+    /// Write a MathML node and its subtree.
+    Math(&'a MathDomNode),
+    /// Write a MathML element and its subtree.
+    MathNode(&'a MathNode),
+    /// Write the closing tag `</name>`.
+    Close(&'a str),
+}
+
+/// Serializes an HTML or MathML tree with an explicit stack instead of
+/// recursion, so the native stack used does not grow with the tree's depth.
+/// The output is identical to a recursive pre-order walk.
+pub(crate) fn write_tree_markup(
+    root: MarkupStep<'_>,
+    fmt: &mut fmt::Formatter<'_>,
+) -> Result<(), ParseError> {
+    let mut stack = vec![root];
+    while let Some(step) = stack.pop() {
+        match step {
+            MarkupStep::Html(node) => match node {
+                HtmlDomNode::DomSpan(span) => {
+                    write_open_tag(fmt, "span", &span.classes, &span.style, &span.attributes)?;
+                    stack.push(MarkupStep::Close("span"));
+                    stack.extend(span.children.iter().rev().map(MarkupStep::Html));
+                }
+                HtmlDomNode::Anchor(anchor) => {
+                    write_open_tag(fmt, "a", &anchor.classes, &anchor.style, &anchor.attributes)?;
+                    stack.push(MarkupStep::Close("a"));
+                    stack.extend(anchor.children.iter().rev().map(MarkupStep::Html));
+                }
+                HtmlDomNode::Fragment(fragment) => {
+                    stack.extend(fragment.children.iter().rev().map(MarkupStep::Html));
+                }
+                HtmlDomNode::MathML(math_node) => stack.push(MarkupStep::MathNode(math_node)),
+                // Leaves (an SVG node's children are paths and lines).
+                HtmlDomNode::Img(img) => img.write_markup(fmt)?,
+                HtmlDomNode::Symbol(symbol) => symbol.write_markup(fmt)?,
+                HtmlDomNode::SvgNode(svg_node) => svg_node.write_markup(fmt)?,
+            },
+            MarkupStep::Math(node) => match node {
+                MathDomNode::Math(math_node) => stack.push(MarkupStep::MathNode(math_node)),
+                MathDomNode::Fragment(fragment) => {
+                    stack.extend(fragment.children.iter().rev().map(MarkupStep::Math));
+                }
+                MathDomNode::Text(text) => text.write_markup(fmt)?,
+                MathDomNode::Space(space) => space.write_markup(fmt)?,
+            },
+            MarkupStep::MathNode(math_node) => {
+                math_node.write_open_tag(fmt)?;
+                stack.push(MarkupStep::Close(math_node.node_type.as_ref()));
+                stack.extend(math_node.children.iter().rev().map(MarkupStep::Math));
+            }
+            MarkupStep::Close(name) => {
+                fmt.write_str("</")
+                    .and_then(|()| fmt.write_str(name))
+                    .and_then(|()| fmt.write_char('>'))
+                    .map_err(ParseError::from)?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Renders the provided [`VirtualNode`] into a [`String`] buffer.
 pub fn markup_to_string<T: VirtualNode + ?Sized>(node: &T) -> Result<String, ParseError> {
     struct FormatterWriter<'a> {
@@ -199,4 +268,61 @@ pub fn markup_to_string<T: VirtualNode + ?Sized>(node: &T) -> Result<String, Par
     }
 
     Ok(buffer)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::mem::forget;
+    use std::thread::Builder;
+
+    use crate::build_common::make_span;
+    use crate::mathml_tree::{MathNodeType, TextNode};
+
+    const DEPTH: usize = 50_000;
+
+    /// Runs `f` on a thread whose stack is far smaller than a recursive walk of
+    /// a `DEPTH`-deep tree would need.
+    fn on_small_stack(f: impl FnOnce() + Send + 'static) {
+        Builder::new()
+            .stack_size(256 << 10)
+            .spawn(f)
+            .expect("spawn")
+            .join()
+            .expect("serialization overflowed or panicked");
+    }
+
+    #[test]
+    fn html_markup_is_written_without_recursion() {
+        on_small_stack(|| {
+            let mut node: HtmlDomNode = make_span("x", vec![], None, None).into();
+            for _ in 0..DEPTH {
+                node = make_span("x", vec![node], None, None).into();
+            }
+            let markup = node.to_markup().expect("markup");
+            assert_eq!(
+                markup.len(),
+                (DEPTH + 1) * r#"<span class="x"></span>"#.len()
+            );
+            assert!(markup.starts_with(r#"<span class="x"><span class="x">"#));
+            // Dropping is recursive; this test is only about serialization.
+            forget(node);
+        });
+    }
+
+    #[test]
+    fn mathml_markup_and_text_are_written_without_recursion() {
+        on_small_stack(|| {
+            let mut node = MathDomNode::Text(TextNode {
+                text: "a<".to_owned(),
+            });
+            for _ in 0..DEPTH {
+                node = MathNode::with_children(MathNodeType::Mrow, vec![node]).into();
+            }
+            let markup = node.to_markup().expect("markup");
+            assert_eq!(markup.len(), DEPTH * "<mrow></mrow>".len() + "a&lt;".len());
+            assert_eq!(node.to_text(), "a<");
+            forget(node);
+        });
+    }
 }
