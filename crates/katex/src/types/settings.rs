@@ -193,6 +193,15 @@ pub struct Settings {
     /// stack a render uses; exceeding it is a parse error. Not a KaTeX
     /// setting: KaTeX relies on JavaScript's own recursion limit.
     pub max_nesting: usize,
+    /// Whether the input may define or alias macros with `\def`, `\gdef`,
+    /// `\edef`, `\xdef`, `\let`, `\futurelet`, `\global`, `\long`,
+    /// `\newcommand`, `\renewcommand` or `\providecommand`.
+    ///
+    /// When `false`, these commands are a parse error where they appear in the
+    /// input, which rules out user-defined recursion and argument-copying
+    /// macros. KaTeX's own macros (such as `\tag`) and [`Settings::macros`]
+    /// keep working. Not a KaTeX setting; defaults to `true` as in KaTeX.
+    pub allow_macro_definitions: bool,
     /// Whether settings persist globally across render calls.
     ///
     /// When `true`, settings remain active for subsequent expressions.
@@ -238,6 +247,7 @@ impl Settings {
     /// - `max_size`: `f64::INFINITY`
     /// - `max_expand`: `1000`
     /// - `max_nesting`: [`DEFAULT_MAX_NESTING`]
+    /// - `allow_macro_definitions`: `true`
     /// - `global_group`: `false`
     #[must_use]
     #[builder]
@@ -271,6 +281,8 @@ impl Settings {
         max_expand: Option<usize>,
         /// Maximum nesting depth of groups, commands and environments.
         max_nesting: Option<usize>,
+        /// Whether the input may define macros (`\def`, `\newcommand`, ...).
+        allow_macro_definitions: Option<bool>,
         /// Whether settings persist globally across render calls.
         global_group: Option<bool>,
         /// Size multiplier for rendering (scaling factor).
@@ -293,6 +305,7 @@ impl Settings {
             max_size: max_size.unwrap_or(f64::INFINITY).max(0.0),
             max_expand: max_expand.unwrap_or(1000),
             max_nesting: max_nesting.unwrap_or(DEFAULT_MAX_NESTING),
+            allow_macro_definitions: allow_macro_definitions.unwrap_or(true),
             global_group: global_group.unwrap_or(false),
             size_multiplier: size_multiplier.unwrap_or(1.0),
             color,

@@ -194,6 +194,8 @@ pub enum ParseErrorKind {
     MacroTooManyExpansions,
     #[error("Too deeply nested: more than {max} levels (maxNesting setting)")]
     TooDeeplyNested { max: usize },
+    #[error("Macro definitions are disabled (allowMacroDefinitions setting): {command}")]
+    MacroDefinitionsDisallowed { command: String },
     #[error("Incomplete placeholder at end of macro body")]
     MacroIncompletePlaceholder,
     #[error("Internal error: stack unexpectedly empty during token expansion")]

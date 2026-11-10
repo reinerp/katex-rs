@@ -195,6 +195,10 @@ fn parse_js_options(options: JsValue) -> Result<JsSettings, JsValue> {
         settings.max_nesting = max_nesting as usize;
     }
 
+    if let Some(allow) = opt_bool("allowMacroDefinitions")? {
+        settings.allow_macro_definitions = allow;
+    }
+
     let strict_value = get("strict")?;
     if !strict_value.is_undefined() && !strict_value.is_null() {
         if let Some(strict_bool) = strict_value.as_bool() {

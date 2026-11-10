@@ -9,9 +9,11 @@ use crate::macros::builtins::BUILTIN_MACROS;
 use crate::namespace::{KeyMap, Namespace};
 use crate::types::TokenText;
 use crate::types::{
-    ErrorLocationProvider, Mode, ParseError, ParseErrorKind, Settings, SourceLocation, Token,
+    ErrorLocationProvider, LexerInterface as _, Mode, ParseError, ParseErrorKind, Settings,
+    SourceLocation, Token,
 };
 use alloc::sync::Arc;
+use core::ptr;
 
 use crate::macros::{
     MacroArg, MacroContextInterface, MacroDefinition, MacroExpansion, MacroExpansionResult,
@@ -27,6 +29,26 @@ pub const IMPLICIT_COMMANDS: phf::Set<&str> = phf::phf_set! {
     "_",
     "\\limits",
     "\\nolimits",
+};
+
+/// Commands that define or alias macros, rejected in the input when
+/// [`Settings::allow_macro_definitions`] is `false`. The names starting with
+/// two backslashes are internal forms of `\global` combinations.
+pub const MACRO_DEFINITION_COMMANDS: phf::Set<&str> = phf::phf_set! {
+    "\\def",
+    "\\gdef",
+    "\\edef",
+    "\\xdef",
+    "\\let",
+    "\\futurelet",
+    "\\global",
+    "\\long",
+    "\\newcommand",
+    "\\renewcommand",
+    "\\providecommand",
+    "\\\\globallong",
+    "\\\\globallet",
+    "\\\\globalfuture",
 };
 
 /// MacroExpander: expands macros until only non-macro tokens remain
@@ -187,6 +209,29 @@ impl<'a> MacroExpander<'a> {
         self.nesting_depth = self.nesting_depth.saturating_sub(1);
     }
 
+    /// Fails if `token` is a macro-definition command written in the input
+    /// while [`Settings::allow_macro_definitions`] is `false`. Definitions
+    /// produced by KaTeX's own macros (`\tag` uses `\gdef`) or by
+    /// [`Settings::macros`] come from their own strings and are allowed.
+    pub fn check_macro_definition(&self, token: &Token) -> Result<(), ParseError> {
+        let name = token.text.as_str();
+        if self.settings.allow_macro_definitions
+            || !MACRO_DEFINITION_COMMANDS.contains(name)
+            || !token
+                .loc
+                .as_ref()
+                .is_some_and(|loc| ptr::eq(loc.input.as_ptr(), self.lexer.input().as_ptr()))
+        {
+            return Ok(());
+        }
+        Err(ParseError::with_token(
+            ParseErrorKind::MacroDefinitionsDisallowed {
+                command: name.to_owned(),
+            },
+            token,
+        ))
+    }
+
     /// Increment expansion counter and check against max_expand
     fn count_expansion(&mut self, amount: usize) -> Result<(), ParseError> {
         self.expansion_count += amount;
@@ -304,6 +349,7 @@ impl<'a> MacroExpander<'a> {
     /// example `\newcommand` redefining a command) propagate, as in KaTeX.
     fn get_expansion(&mut self, token: &Token) -> Result<Option<MacroExpansion>, ParseError> {
         let name = token.text.as_str();
+        self.check_macro_definition(token)?;
         // If single character has a catcode other than 13 (active), don't
         // expand it
         if name.chars().count() == 1

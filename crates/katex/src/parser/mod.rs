@@ -1373,6 +1373,8 @@ impl<'a> Parser<'a> {
             ));
         }
 
+        self.gullet.check_macro_definition(&token)?;
+
         // A command and everything parsed for it (its arguments, or the rest
         // of the expression for commands like \color) is one nesting level.
         self.gullet.enter_nesting(&token)?;
