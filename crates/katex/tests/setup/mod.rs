@@ -910,6 +910,16 @@ pub fn normalize_style_attributes(markup: &str) -> String {
 
 /// Normalize attribute order within HTML tags for deterministic comparisons
 pub fn normalize_html_attributes(markup: &str) -> String {
+    normalize_attribute_lists(markup, true)
+}
+
+/// Normalize the spacing of HTML attributes (KaTeX writes `class ="..."` on
+/// MathML elements) but keep their order.
+pub fn normalize_attribute_spacing(markup: &str) -> String {
+    normalize_attribute_lists(markup, false)
+}
+
+fn normalize_attribute_lists(markup: &str, sort: bool) -> String {
     static TAG_REGEX: OnceLock<Regex> = OnceLock::new();
     static ATTR_REGEX: OnceLock<Regex> = OnceLock::new();
     let tag_regex = TAG_REGEX.get_or_init(|| Regex::new("<([a-zA-Z0-9]+)([^>]*)>").unwrap());
@@ -940,7 +950,9 @@ pub fn normalize_html_attributes(markup: &str) -> String {
                         )
                     })
                     .collect();
-                attrs.sort_by(|a, b| a.0.cmp(b.0));
+                if sort {
+                    attrs.sort_by(|a, b| a.0.cmp(b.0));
+                }
                 let formatted = attrs
                     .into_iter()
                     .map(|(name, value)| format!("{name}=\"{value}\""))

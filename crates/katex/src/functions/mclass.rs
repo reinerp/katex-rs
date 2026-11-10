@@ -4,7 +4,7 @@
 //! migrated from KaTeX's mclass.js.
 
 use crate::build_html::DomType;
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::build_common::make_span;
 use crate::define_function::{FunctionDefSpec, FunctionPropSpec, ord_argument};
@@ -142,7 +142,7 @@ fn mathml_builder(
         // Set spacing based on what is the most likely adjacent atom type.
         // See TeXbook p170.
         if let MathDomNode::Math(math_node) = &mut node {
-            let mut attributes = KeyMap::default();
+            let mut attributes = AttributeMap::default();
 
             match mclass_node.mclass {
                 DomType::Mbin => {

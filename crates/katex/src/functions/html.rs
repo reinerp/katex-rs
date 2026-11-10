@@ -3,7 +3,7 @@
 //! This module handles HTML extension commands like \htmlClass, \htmlId,
 //! \htmlStyle, \htmlData migrated from KaTeX's html.js.
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::build_common::make_span;
 use crate::define_function::{FunctionDefSpec, FunctionPropSpec, ord_argument};
@@ -50,7 +50,7 @@ pub fn define_html(ctx: &mut crate::KatexContext) {
                     .map(|t| *t as &dyn ErrorLocationProvider),
             )?;
 
-            let mut attributes = KeyMap::default();
+            let mut attributes = AttributeMap::default();
             let mut trust_context = match context.func_name {
                 "\\htmlClass" => {
                     attributes.insert("class".to_owned(), value.to_owned_string());

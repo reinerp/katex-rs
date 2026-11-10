@@ -9,12 +9,12 @@ use crate::context::KatexContext;
 use crate::dom_tree::{Anchor, DomSpan, HtmlDomFragment, HtmlDomNode, Span, SvgNode, SymbolNode};
 use crate::font_metrics::get_character_metrics;
 use crate::font_metrics_data::CharacterMetrics;
-use crate::namespace::KeyMap;
 use crate::options::{FontShape, FontWeight, Options};
 use crate::parser::parse_node::AnyParseNode;
 use crate::spacing_data::Measurement;
 use crate::symbols::{Font, Mode, is_ligature};
 use crate::tree::DocumentFragment;
+use crate::types::AttributeMap;
 use crate::types::ClassList;
 use crate::types::{CssProperty, CssStyle, ParseErrorKind};
 use crate::units::make_em;
@@ -1161,7 +1161,7 @@ pub fn make_anchor<T: Into<ClassList>>(
     options: &Options,
 ) -> Anchor {
     // Create attributes map with href
-    let mut attributes = KeyMap::default();
+    let mut attributes = AttributeMap::default();
     attributes.insert("href".to_owned(), href.to_owned());
 
     let mut anchor = Anchor::builder()

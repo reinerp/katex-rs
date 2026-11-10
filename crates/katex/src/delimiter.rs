@@ -9,7 +9,7 @@ use alloc::borrow::Cow;
 
 use phf::{Set, phf_set};
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::build_common::{
     VListChild, VListElem, VListKern, VListParam, lookup_symbol, make_span, make_svg_span,
@@ -285,7 +285,7 @@ fn make_inner(
         alternate: Some(inner_path(ch, (1000.0 * height).round())),
     };
 
-    let mut svg_attributes = KeyMap::default();
+    let mut svg_attributes = AttributeMap::default();
     svg_attributes.extend([
         ("width".to_owned(), make_em(width)),
         ("height".to_owned(), make_em(height)),
@@ -566,7 +566,7 @@ pub fn make_stacked_delim<T: Into<ClassList>>(
         let width = make_em(view_box_width / 1000.0);
         let height = make_em(view_box_height / 1000.0);
 
-        let mut svg_attributes = KeyMap::default();
+        let mut svg_attributes = AttributeMap::default();
         svg_attributes.extend([
             ("width".to_owned(), width.clone()),
             ("height".to_owned(), height.clone()),
@@ -733,7 +733,7 @@ fn sqrt_svg(
     };
 
     let svg_children = vec![SvgChildNode::Path(path_node)];
-    let mut svg_attributes = KeyMap::default();
+    let mut svg_attributes = AttributeMap::default();
     svg_attributes.extend([
         ("width".to_owned(), "400em".to_owned()),
         ("height".to_owned(), make_em(height)),

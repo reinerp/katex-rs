@@ -4,7 +4,7 @@
 //! format, which is the W3C standard for representing mathematical expressions
 //! in XML.
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 use core::mem;
 use strum::IntoDiscriminant as _;
 
@@ -120,7 +120,7 @@ pub fn make_row(mut body: Vec<MathDomNode>) -> MathDomNode {
 
     MathDomNode::Math(MathNode {
         node_type: MathNodeType::Mrow,
-        attributes: KeyMap::default(),
+        attributes: AttributeMap::default(),
         children: body,
         classes: ClassList::Empty,
     })
@@ -577,7 +577,7 @@ pub fn build_mathml(
             } else {
                 MathDomNode::Math(MathNode {
                     node_type: MathNodeType::Mrow,
-                    attributes: KeyMap::default(),
+                    attributes: AttributeMap::default(),
                     children: expression_enum.clone(),
                     classes: ClassList::Empty,
                 })
@@ -585,7 +585,7 @@ pub fn build_mathml(
         } else {
             MathDomNode::Math(MathNode {
                 node_type: MathNodeType::Mrow,
-                attributes: KeyMap::default(),
+                attributes: AttributeMap::default(),
                 children: expression_enum,
                 classes: ClassList::Empty,
             })
@@ -593,7 +593,7 @@ pub fn build_mathml(
     } else {
         MathDomNode::Math(MathNode {
             node_type: MathNodeType::Mrow,
-            attributes: KeyMap::default(),
+            attributes: AttributeMap::default(),
             children: expression_enum,
             classes: ClassList::Empty,
         })
@@ -602,7 +602,7 @@ pub fn build_mathml(
     // Create annotation using MathDomNodeEnum
     let annotation_enum = MathDomNode::Math(MathNode {
         node_type: MathNodeType::Annotation,
-        attributes: KeyMap::default(),
+        attributes: AttributeMap::default(),
         children: vec![MathDomNode::Text(TextNode {
             text: tex_expression.to_owned(),
         })],
@@ -621,7 +621,7 @@ pub fn build_mathml(
     // Create semantics using MathDomNodeEnum
     let semantics_enum = MathDomNode::Math(MathNode {
         node_type: MathNodeType::Semantics,
-        attributes: KeyMap::default(),
+        attributes: AttributeMap::default(),
         children: vec![wrapper_enum, annotation_with_encoding],
         classes: ClassList::Empty,
     });
@@ -629,7 +629,7 @@ pub fn build_mathml(
     // Create math element using MathDomNodeEnum
     let mut math_enum = MathDomNode::Math(MathNode {
         node_type: MathNodeType::Math,
-        attributes: KeyMap::default(),
+        attributes: AttributeMap::default(),
         children: vec![semantics_enum],
         classes: ClassList::Empty,
     });

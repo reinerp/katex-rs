@@ -5,7 +5,7 @@ use alloc::sync::Arc;
 use bon::bon;
 
 use crate::macro_expander::MacroMap;
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::types::{ErrorLocationProvider, ParseError, ParseErrorKind};
 use crate::utils::protocol_from_url;
@@ -704,7 +704,7 @@ pub struct TrustContext {
     ///
     /// Used with commands like `\htmlData` to add custom data attributes
     /// to rendered HTML elements.
-    pub attributes: Option<KeyMap<String, String>>,
+    pub attributes: Option<AttributeMap>,
 }
 
 /// Function signature for custom trust evaluation in KaTeX.

@@ -26,6 +26,8 @@ pub use crate::symbols::Mode;
 pub use class_list::ClassList;
 pub use tokens::{Token, TokenText};
 
+mod attribute_map;
+pub use attribute_map::AttributeMap;
 mod settings;
 pub use settings::{
     BUILD_LEVELS_PER_NESTING_LEVEL, DEFAULT_MAX_EXPANDED_TOKENS, DEFAULT_MAX_NESTING, OutputFormat,

@@ -11,9 +11,9 @@ use crate::ParseError;
 use crate::build_common::{make_span, make_svg_span};
 use crate::dom_tree::{DomSpan, HtmlDomNode, LineNode, PathNode, SvgChildNode, SvgNode};
 use crate::mathml_tree::{MathNode, MathNodeType, TextNode};
-use crate::namespace::KeyMap;
 use crate::options::Options;
 use crate::parser::parse_node::AnyParseNode;
+use crate::types::AttributeMap;
 use crate::types::ClassList;
 use crate::types::CssProperty;
 use crate::types::ParseErrorKind;
@@ -427,7 +427,7 @@ pub fn math_ml_node(label: &str) -> MathNode {
 
     let mut node = MathNode {
         node_type: MathNodeType::Mo,
-        attributes: KeyMap::default(),
+        attributes: AttributeMap::default(),
         children: vec![text_node.into()],
         classes: ClassList::Empty,
     };

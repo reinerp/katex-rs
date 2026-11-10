@@ -9,11 +9,11 @@ use crate::ParseError;
 #[cfg(feature = "wasm")]
 use crate::dom_tree::create_class;
 use crate::tree::{DocumentFragment, MarkupStep, VirtualNode, write_tree_markup};
+use crate::types::{AttributeMap, ClassList, CssStyle};
 use crate::units::make_em;
 use crate::utils::escape_into;
 #[cfg(feature = "wasm")]
 use crate::web_context::WebContext;
-use crate::{namespace::KeyMap, types::ClassList, types::CssStyle};
 use bon::bon;
 use core::fmt::{self, Debug, Write as _};
 use strum::AsRefStr;
@@ -174,7 +174,7 @@ pub struct MathNode {
     /// The type of MathML node
     pub node_type: MathNodeType,
     /// Attributes of the MathML node
-    pub attributes: KeyMap<String, String>,
+    pub attributes: AttributeMap,
     /// Child nodes of the MathML node
     pub children: Vec<MathDomNode>,
     /// CSS classes applied to the MathML node
@@ -203,7 +203,7 @@ impl MathNode {
         /// Node type
         node_type: MathNodeType,
         /// Node attributes
-        attributes: Option<KeyMap<String, String>>,
+        attributes: Option<AttributeMap>,
         /// Child nodes
         children: Option<Vec<MathDomNode>>,
         /// CSS classes
@@ -222,7 +222,7 @@ impl MathNode {
     pub fn with_children(node_type: MathNodeType, children: Vec<MathDomNode>) -> Self {
         Self {
             node_type,
-            attributes: KeyMap::default(),
+            attributes: AttributeMap::default(),
             children,
             classes: ClassList::Empty,
         }

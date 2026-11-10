@@ -10,7 +10,7 @@ use crate::style::Style;
 use crate::symbols::Atom;
 use crate::types::{Mode, SourceLocation, Token, TokenText};
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 use strum::{AsRefStr, Display, EnumDiscriminants};
 use thiserror::Error;
 
@@ -1719,7 +1719,7 @@ pub struct ParseNodeHtml {
     /// Optional source location for error reporting
     pub loc: Option<SourceLocation>,
     /// HTML attributes as key-value pairs
-    pub attributes: KeyMap<String, String>,
+    pub attributes: AttributeMap,
     /// The HTML content as parse nodes
     pub body: Vec<AnyParseNode>,
 }

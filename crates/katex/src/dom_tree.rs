@@ -7,7 +7,7 @@
 use core::fmt::{self, Write as _};
 
 use crate::ParseError;
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 use crate::types::ParseErrorKind;
 #[cfg(feature = "wasm")]
 use crate::web_context::WebContext;
@@ -36,7 +36,7 @@ pub struct Span<T> {
     /// Child nodes contained within this span
     pub children: Vec<T>,
     /// HTML attributes for this span element
-    pub attributes: KeyMap<String, String>,
+    pub attributes: AttributeMap,
     /// CSS classes applied to this span
     pub classes: ClassList,
     /// Height of this span element
@@ -69,7 +69,7 @@ impl<T> Span<T> {
         /// Child nodes contained within this span
         children: Vec<T>,
         /// Attributes for this span element
-        attributes: Option<KeyMap<String, String>>,
+        attributes: Option<AttributeMap>,
         /// Classes applied to this span
         classes: Option<ClassList>,
         /// Height of this span element
@@ -115,7 +115,7 @@ impl<T> Span<T> {
     ) -> Self {
         let mut span = Self {
             children,
-            attributes: KeyMap::default(),
+            attributes: AttributeMap::default(),
             classes,
             height: 0.0,
             depth: 0.0,
@@ -140,7 +140,7 @@ pub struct Anchor {
     /// Child nodes contained within this anchor
     pub children: Vec<HtmlDomNode>,
     /// HTML attributes for this anchor element
-    pub attributes: KeyMap<String, String>,
+    pub attributes: AttributeMap,
     /// CSS classes applied to this anchor
     pub classes: ClassList,
     /// Height of this anchor element
@@ -170,7 +170,7 @@ impl Anchor {
         /// Child nodes contained within this anchor
         children: Option<Vec<HtmlDomNode>>,
         /// HTML attributes for this anchor element
-        attributes: Option<KeyMap<String, String>>,
+        attributes: Option<AttributeMap>,
         /// Classes applied to this anchor
         classes: Option<ClassList>,
         /// Height of this anchor element
@@ -205,7 +205,7 @@ impl Anchor {
     #[must_use]
     pub const fn new(
         children: Vec<HtmlDomNode>,
-        attributes: KeyMap<String, String>,
+        attributes: AttributeMap,
         classes: ClassList,
         height: f64,
         depth: f64,
@@ -435,7 +435,7 @@ pub struct SvgNode {
     /// Child nodes contained within this SVG
     pub children: Vec<SvgChildNode>,
     /// HTML attributes for this SVG element
-    pub attributes: KeyMap<String, String>,
+    pub attributes: AttributeMap,
 }
 
 #[bon]
@@ -446,7 +446,7 @@ impl SvgNode {
         /// Children for the SVG node
         children: Vec<SvgChildNode>,
         /// Attributes for the SVG node
-        attributes: Option<KeyMap<String, String>>,
+        attributes: Option<AttributeMap>,
     ) -> Self {
         Self {
             children,
@@ -511,7 +511,7 @@ pub(crate) fn write_open_tag<W: fmt::Write>(
     tag: &str,
     classes: &ClassList,
     style: &CssStyle,
-    attributes: &KeyMap<String, String>,
+    attributes: &AttributeMap,
 ) -> Result<(), ParseError> {
     map_fmt(writer.write_char('<'))?;
     map_fmt(writer.write_str(tag))?;
@@ -1037,7 +1037,7 @@ impl HtmlDomNode {
 
     /// Get the attributes of this node
     #[must_use]
-    pub const fn attributes(&self) -> Option<&KeyMap<String, String>> {
+    pub const fn attributes(&self) -> Option<&AttributeMap> {
         match self {
             Self::DomSpan(span) => Some(&span.attributes),
             Self::Anchor(anchor) => Some(&anchor.attributes),
@@ -1100,12 +1100,12 @@ impl VirtualNode for PathNode {
 #[derive(Debug, Clone)]
 pub struct LineNode {
     /// SVG attributes for this line element
-    pub attributes: KeyMap<String, String>,
+    pub attributes: AttributeMap,
 }
 
 fn node_attributes_to_markup<W: fmt::Write>(
     writer: &mut W,
-    attributes: &KeyMap<String, String>,
+    attributes: &AttributeMap,
 ) -> Result<(), ParseError> {
     for (attr, value) in attributes {
         if !attr.is_empty() {
@@ -1123,7 +1123,7 @@ fn node_attributes_to_markup<W: fmt::Write>(
 }
 
 #[cfg(feature = "wasm")]
-fn node_attributes_to_node(element: &web_sys::Element, attributes: &KeyMap<String, String>) {
+fn node_attributes_to_node(element: &web_sys::Element, attributes: &AttributeMap) {
     for (attr, value) in attributes {
         if !attr.is_empty() {
             if attr.contains(|c: char| {

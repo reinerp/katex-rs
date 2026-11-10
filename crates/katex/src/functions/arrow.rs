@@ -3,7 +3,7 @@
 //! This module handles extensible arrow symbols in mathematical expressions,
 //! migrated from KaTeX's arrow.js.
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::build_common::{VListElemAndShift, VListParam, make_span, make_v_list};
 use crate::build_html::build_group;
@@ -270,7 +270,7 @@ fn mathml_builder(
 
 /// Helper function to create a padded MathML node
 fn padded_node(child: Option<MathDomNode>) -> MathNode {
-    let mut attributes = KeyMap::default();
+    let mut attributes = AttributeMap::default();
     attributes.extend([
         ("width".to_owned(), "+0.6em".to_owned()),
         ("lspace".to_owned(), "0.3em".to_owned()),

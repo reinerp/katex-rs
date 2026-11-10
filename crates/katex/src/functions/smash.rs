@@ -5,7 +5,7 @@
 //!
 //! Migrated from KaTeX's smash.js.
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::build_common::{VListElem, VListParam, make_span, make_v_list};
 use crate::build_html;
@@ -184,7 +184,7 @@ fn mathml_builder(
     let body = build_mathml::build_group(ctx, &smash_node.body, options)?;
 
     // Create mpadded element for MathML
-    let mut attributes = KeyMap::default();
+    let mut attributes = AttributeMap::default();
 
     if smash_node.smash_height {
         attributes.insert("height".to_owned(), "0px".to_owned());

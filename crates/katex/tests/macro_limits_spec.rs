@@ -89,12 +89,7 @@ fn katex_and_host_macros_still_work_when_disabled() {
         let allowed = render_to_string(&ctx, tex, &Settings::builder().display_mode(true).build());
         let disabled = render_to_string(&ctx, tex, &no_definitions());
         assert!(disabled.is_ok(), "{tex}: {disabled:?}");
-        // Same output (compared by length: attribute order is not yet stable).
-        assert_eq!(
-            disabled.map(|h| h.len()).ok(),
-            allowed.map(|h| h.len()).ok(),
-            "{tex}"
-        );
+        assert_eq!(disabled.ok(), allowed.ok(), "{tex}");
     }
     // Host-supplied macros are trusted, even if they define macros.
     let mut macros = MacroMap::default();

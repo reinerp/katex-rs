@@ -23,8 +23,25 @@ fn normalize(markup: &str) -> String {
     setup::normalize_html_attributes(&setup::normalize_style_attributes(markup))
 }
 
+/// Like [`normalize`], but attributes must also be in KaTeX's order.
+fn normalize_keeping_order(markup: &str) -> String {
+    setup::normalize_attribute_spacing(&setup::normalize_style_attributes(markup))
+}
+
 #[test]
 fn pinned_upstream_rendering() {
+    compare_with_pinned_upstream(normalize);
+}
+
+/// Attributes are written in insertion order, as KaTeX does, so the output is
+/// deterministic and matches KaTeX's attribute order exactly.
+#[test]
+fn pinned_upstream_attribute_order() {
+    compare_with_pinned_upstream(normalize_keeping_order);
+}
+
+#[allow(clippy::unwrap_used)]
+fn compare_with_pinned_upstream(normalize: fn(&str) -> String) {
     let fixtures: Fixtures = serde_json::from_str(include_str!("fixtures/upstream.json")).unwrap();
     assert_eq!(
         fixtures.revision,

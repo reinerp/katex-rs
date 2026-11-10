@@ -134,10 +134,11 @@ fn mathml_builder(
 
         let mut rule = MathNode::builder().node_type(MathNodeType::Mspace).build();
 
+        // Same attribute order as KaTeX.
         rule.attributes.extend([
+            ("mathbackground".to_owned(), color),
             ("width".to_owned(), make_em(width)),
             ("height".to_owned(), make_em(height)),
-            ("mathbackground".to_owned(), color),
         ]);
 
         let mut wrapper = MathNode::builder()
@@ -145,14 +146,11 @@ fn mathml_builder(
             .children(vec![MathDomNode::Math(rule)])
             .build();
 
-        wrapper.attributes.extend([
-            ("height".to_owned(), make_em(shift)),
-            ("voffset".to_owned(), make_em(shift)),
-        ]);
-
+        wrapper.set_attribute("height", make_em(shift));
         if shift < 0.0 {
             wrapper.set_attribute("depth", make_em(-shift));
         }
+        wrapper.set_attribute("voffset", make_em(shift));
 
         Ok(MathDomNode::Math(wrapper))
     } else {

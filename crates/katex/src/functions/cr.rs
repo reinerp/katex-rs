@@ -5,7 +5,7 @@
 //! environments and top-level line breaks, with optional size specifications.
 
 use crate::macros::MacroContextInterface as _;
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::ParseError;
 use crate::build_common::make_span;
@@ -94,7 +94,7 @@ fn mathml_builder(
     ctx: &KatexContext,
 ) -> Result<MathDomNode, ParseError> {
     if let ParseNode::Cr(cr_node) = node {
-        let mut attributes = KeyMap::default();
+        let mut attributes = AttributeMap::default();
 
         if cr_node.new_line {
             attributes.insert("linebreak".to_owned(), "newline".to_owned());

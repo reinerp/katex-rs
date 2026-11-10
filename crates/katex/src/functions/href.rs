@@ -3,7 +3,7 @@
 //! This module handles hyperlink functions in mathematical expressions,
 //! migrated from KaTeX's href.js.
 
-use crate::namespace::KeyMap;
+use crate::types::AttributeMap;
 
 use crate::build_common::make_anchor;
 use crate::define_function::{FunctionDefSpec, FunctionPropSpec};
@@ -199,7 +199,7 @@ fn mathml_builder(
     };
 
     // Set href attribute
-    let mut attributes = KeyMap::default();
+    let mut attributes = AttributeMap::default();
     attributes.insert("href".to_owned(), href_node.href.clone());
 
     Ok(MathDomNode::Math(
