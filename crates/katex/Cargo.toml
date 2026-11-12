@@ -13,7 +13,6 @@ keywords = ["latex", "math", "katex", "wasm", "parsing"]
 include = [
     "../../LICENSE",
     "../../README.md",
-    "build.rs",
     "data/**",
     "src/**/*.rs",
     "benches/**",
@@ -46,11 +45,6 @@ harness = false
 [[bench]]
 name = "perf_gungraun"
 harness = false
-
-[build-dependencies]
-serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
-unicode-normalization = "0.1.25"
 
 [dev-dependencies]
 serde_json = "1.0.151"

@@ -1159,7 +1159,7 @@ pub const OIIINT_SIZE2: (f64, f64) = (1.98, 0.659);
 /// SVG data for static SVG elements
 ///
 /// Equivalent to KaTeX buildCommon.js svgData
-/// However, the values slightly differ because they are based on phf_map!
+/// (stored as a sorted table rather than an object).
 /// Values are `path` => (width, height)
 const SVG_DATA: Map<&'static str, (f64, f64)> = StrMap::new(&[
     ("oiiintSize1", OIIINT_SIZE1),

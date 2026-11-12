@@ -6,7 +6,7 @@
 
 use crate::static_map::{CharMap, Map};
 
-include!(concat!(env!("OUT_DIR"), "/unicode_symbols_phf.rs"));
+include!("../generated/unicode_symbols.rs");
 
 #[cfg(test)]
 mod tests {

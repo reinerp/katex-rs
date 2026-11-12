@@ -1,6 +1,7 @@
 //! Font metric data storage
 //! This file contains font metric data and measurements for KaTeX
-//! Generated from the original JavaScript fontMetricsData.js using phf macros
+//! Generated from the original JavaScript fontMetricsData.js (see
+//! tools/gen_tables.py)
 
 use crate::static_map::{Map, StrMap, U32Map};
 use crate::{ParseError, font_metrics::MetricMap, namespace::KeyMap, types::ParseErrorKind};
@@ -35,8 +36,8 @@ impl CharacterMetrics {
     }
 }
 
-// Include the generated phf maps from the build script
-include!(concat!(env!("OUT_DIR"), "/font_metrics_data_phf.rs"));
+// Tables generated from data/font_metrics_data.json by tools/gen_tables.py
+include!("generated/font_metrics_data.rs");
 
 /// Main font metrics data structure
 #[derive(Default)]

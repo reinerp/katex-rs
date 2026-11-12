@@ -11,7 +11,7 @@
 //!
 //! The font metrics are stored in fonts cmsy10, cmsy7, and cmsy5 respectively.
 
-include!(concat!(env!("OUT_DIR"), "/sigmas_and_xis_generated.rs"));
+include!("generated/sigmas_and_xis.rs");
 
 use crate::font_metrics_data::CharacterMetrics;
 use crate::namespace::KeyMap;

@@ -69,7 +69,7 @@ pub struct Symbols {
     text: KeyMap<String, CharInfo>,
 }
 
-include!(concat!(env!("OUT_DIR"), "/generated_symbols_data.rs"));
+include!("../generated/symbols_data.rs");
 
 /// Default implementation for Symbols
 ///
