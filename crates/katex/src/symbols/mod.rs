@@ -37,8 +37,8 @@
 mod types;
 use crate::ParseError;
 use crate::namespace::KeyMap;
+use crate::static_map::{Map, StrMap};
 use crate::types::ParseErrorKind;
-use phf::phf_map;
 pub use types::{Atom, CharInfo, Font, Group, Mode, NonAtom};
 
 /// Core symbol table for mathematical typesetting
@@ -377,12 +377,12 @@ const fn create_wide_char(high: u16, low: u16) -> char {
 /// # See Also
 ///
 /// - [`is_ligature`] for checking if a string is a ligature
-pub const LIGATURES: phf::Map<&str, &str> = phf_map!(
-    "--" => "\u{2013}",
-    "---" => "\u{2014}",
-    "``" => "\u{201c}",
-    "''" => "\u{201d}",
-);
+pub const LIGATURES: Map<&str, &str> = StrMap::new(&[
+    ("''", "\u{201d}"),
+    ("--", "\u{2013}"),
+    ("---", "\u{2014}"),
+    ("``", "\u{201c}"),
+]);
 
 /// Conversion from string to Group enum
 ///

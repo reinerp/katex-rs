@@ -11,16 +11,13 @@ use crate::dom_tree::HtmlDomNode;
 use crate::mathml_tree::{MathDomNode, MathNode, MathNodeType};
 use crate::options::Options;
 use crate::parser::parse_node::{AnyParseNode, NodeType};
+use crate::static_map::{Map, StrMap};
 use crate::types::{Mode, ParseErrorKind};
-use phf::phf_map;
 
 /// Default variant mapping for MathML elements
 /// Equivalent to defaultVariant in the original JavaScript
-static DEFAULT_VARIANT: phf::Map<&'static str, &'static str> = phf_map! {
-    "mi" => "italic",
-    "mn" => "normal",
-    "mtext" => "normal",
-};
+static DEFAULT_VARIANT: Map<&'static str, &'static str> =
+    StrMap::new(&[("mi", "italic"), ("mn", "normal"), ("mtext", "normal")]);
 
 /// Registers mathord and textord functions in the KaTeX context
 pub fn define_symbols_ord(ctx: &mut KatexContext) {

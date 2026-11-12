@@ -16,51 +16,88 @@ use crate::parser::parse_node::{
     AnyParseNode, NodeType, ParseNode, ParseNodeDelimsizing, ParseNodeLeftRight,
     ParseNodeLeftRightRight, ParseNodeMiddle, check_symbol_node_type,
 };
+use crate::static_map::{Map, Set, StrMap, StrSet};
 use crate::types::Mode;
 use crate::types::{ArgType, ParseError, ParseErrorKind};
 use crate::units::make_em;
 use crate::{ClassList, KatexContext, build_html, build_mathml};
 
-use phf::phf_map;
-
 /// Delimiter size mappings for sizing commands
-const DELIMITER_SIZES: phf::Map<&'static str, (DomType, u8)> = phf_map! {
-    "\\bigl" => (DomType::Mopen, 1),
-    "\\Bigl" => (DomType::Mopen, 2),
-    "\\biggl" => (DomType::Mopen, 3),
-    "\\Biggl" => (DomType::Mopen, 4),
-    "\\bigr" => (DomType::Mclose, 1),
-    "\\Bigr" => (DomType::Mclose, 2),
-    "\\biggr" => (DomType::Mclose, 3),
-    "\\Biggr" => (DomType::Mclose, 4),
-    "\\bigm" => (DomType::Mrel, 1),
-    "\\Bigm" => (DomType::Mrel, 2),
-    "\\biggm" => (DomType::Mrel, 3),
-    "\\Biggm" => (DomType::Mrel, 4),
-    "\\big" => (DomType::Mord, 1),
-    "\\Big" => (DomType::Mord, 2),
-    "\\bigg" => (DomType::Mord, 3),
-    "\\Bigg" => (DomType::Mord, 4),
-};
+const DELIMITER_SIZES: Map<&'static str, (DomType, u8)> = StrMap::new(&[
+    ("\\Big", (DomType::Mord, 2)),
+    ("\\Bigg", (DomType::Mord, 4)),
+    ("\\Biggl", (DomType::Mopen, 4)),
+    ("\\Biggm", (DomType::Mrel, 4)),
+    ("\\Biggr", (DomType::Mclose, 4)),
+    ("\\Bigl", (DomType::Mopen, 2)),
+    ("\\Bigm", (DomType::Mrel, 2)),
+    ("\\Bigr", (DomType::Mclose, 2)),
+    ("\\big", (DomType::Mord, 1)),
+    ("\\bigg", (DomType::Mord, 3)),
+    ("\\biggl", (DomType::Mopen, 3)),
+    ("\\biggm", (DomType::Mrel, 3)),
+    ("\\biggr", (DomType::Mclose, 3)),
+    ("\\bigl", (DomType::Mopen, 1)),
+    ("\\bigm", (DomType::Mrel, 1)),
+    ("\\bigr", (DomType::Mclose, 1)),
+]);
 
 /// Supported delimiters
-static DELIMITERS: phf::Set<&'static str> = phf::phf_set! {
-    "(", "\\lparen", ")", "\\rparen",
-    "[", "\\lbrack", "]", "\\rbrack",
-    "\\{", "\\lbrace", "\\}", "\\rbrace",
-    "\\lfloor", "\\rfloor", "\u{230a}", "\u{230b}",
-    "\\lceil", "\\rceil", "\u{2308}", "\u{2309}",
-    "<", ">", "\\langle", "\u{27e8}", "\\rangle", "\u{27e9}", "\\lt", "\\gt",
-    "\\lvert", "\\rvert", "\\lVert", "\\rVert",
-    "\\lgroup", "\\rgroup", "\u{27ee}", "\u{27ef}",
-    "\\lmoustache", "\\rmoustache", "\u{23b0}", "\u{23b1}",
-    "/", "\\backslash",
-    "|", "\\vert", "\\|", "\\Vert",
-    "\\uparrow", "\\Uparrow",
-    "\\downarrow", "\\Downarrow",
-    "\\updownarrow", "\\Updownarrow",
+static DELIMITERS: Set<&'static str> = StrSet::new(&[
+    "(",
+    ")",
     ".",
-};
+    "/",
+    "<",
+    ">",
+    "[",
+    "\\Downarrow",
+    "\\Uparrow",
+    "\\Updownarrow",
+    "\\Vert",
+    "\\backslash",
+    "\\downarrow",
+    "\\gt",
+    "\\lVert",
+    "\\langle",
+    "\\lbrace",
+    "\\lbrack",
+    "\\lceil",
+    "\\lfloor",
+    "\\lgroup",
+    "\\lmoustache",
+    "\\lparen",
+    "\\lt",
+    "\\lvert",
+    "\\rVert",
+    "\\rangle",
+    "\\rbrace",
+    "\\rbrack",
+    "\\rceil",
+    "\\rfloor",
+    "\\rgroup",
+    "\\rmoustache",
+    "\\rparen",
+    "\\rvert",
+    "\\uparrow",
+    "\\updownarrow",
+    "\\vert",
+    "\\{",
+    "\\|",
+    "\\}",
+    "]",
+    "|",
+    "\u{2308}",
+    "\u{2309}",
+    "\u{230a}",
+    "\u{230b}",
+    "\u{23b0}",
+    "\u{23b1}",
+    "\u{27e8}",
+    "\u{27e9}",
+    "\u{27ee}",
+    "\u{27ef}",
+]);
 
 /// Validates delimiter arguments
 fn check_delimiter(
@@ -103,7 +140,12 @@ pub fn define_delimsizing(ctx: &mut KatexContext) {
                 &context,
             )?;
 
-            let (mclass, size) = DELIMITER_SIZES[context.func_name];
+            // Registered from DELIMITER_SIZES's keys, so the lookup succeeds.
+            let &(mclass, size) = DELIMITER_SIZES.get(context.func_name).ok_or_else(|| {
+                ParseError::new(ParseErrorKind::InvalidDelimiterTypeAfter {
+                    function: context.func_name.to_owned(),
+                })
+            })?;
 
             Ok(ParseNode::Delimsizing(ParseNodeDelimsizing {
                 mode: context.parser.mode,

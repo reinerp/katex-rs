@@ -3,8 +3,6 @@
 //! This module handles font changing commands in mathematical expressions,
 //! migrated from KaTeX's font.js.
 
-use phf::phf_map;
-
 use crate::define_function::{FunctionDefSpec, FunctionPropSpec, normalize_argument};
 use crate::dom_tree::HtmlDomNode;
 use crate::functions::mclass::binrel_class;
@@ -13,6 +11,7 @@ use crate::options::Options;
 use crate::parser::parse_node::{
     AnyParseNode, NodeType, ParseNode, ParseNodeFont, ParseNodeMclass, ParseNodeOrdGroup,
 };
+use crate::static_map::{Map, StrMap};
 use crate::types::{ParseError, ParseErrorKind};
 use crate::{KatexContext, build_html, build_mathml};
 
@@ -49,12 +48,12 @@ fn mathml_builder(
 }
 
 // Font aliases
-const FONT_ALIASES_MAP: phf::Map<&str, &str> = phf_map!(
-    "\\Bbb" => "\\mathbb",
-    "\\bold" => "\\mathbf",
-    "\\frak" => "\\mathfrak",
-    "\\bm" => "\\boldsymbol",
-);
+const FONT_ALIASES_MAP: Map<&str, &str> = StrMap::new(&[
+    ("\\Bbb", "\\mathbb"),
+    ("\\bm", "\\boldsymbol"),
+    ("\\bold", "\\mathbf"),
+    ("\\frak", "\\mathfrak"),
+]);
 
 // Main font functions
 const FONT_NAMES: &[&str] = &[

@@ -11,13 +11,13 @@ use crate::dom_tree::HtmlDomNode;
 use crate::mathml_tree::{MathDomNode, MathNode, MathNodeType, TextNode};
 use crate::options::Options;
 use crate::parser::parse_node::{NodeType, ParseNode, ParseNodeGenfrac, ParseNodeInfix};
+use crate::static_map::{Map, StrMap};
 use crate::style::{DISPLAY, SCRIPT, SCRIPTSCRIPT, TEXT};
 use crate::symbols::Atom;
 use crate::types::ClassList;
 use crate::types::{ArgType, Mode, ParseError, ParseErrorKind};
 use crate::units::make_em;
 use crate::{KatexContext, build_html, build_mathml, make_line_span};
-use phf::Map;
 
 fn delim_from_value(delim: &str) -> Option<String> {
     if delim.is_empty() || delim == "." {
@@ -27,13 +27,13 @@ fn delim_from_value(delim: &str) -> Option<String> {
     }
 }
 
-const INFIX_REPLACE_MAP: Map<&'static str, &'static str> = phf::phf_map! {
-    "\\over" => "\\frac",
-    "\\choose" => "\\binom",
-    "\\atop" => r"\\atopfrac",
-    "\\brace" => r"\\bracefrac",
-    "\\brack" => r"\\brackfrac",
-};
+const INFIX_REPLACE_MAP: Map<&'static str, &'static str> = StrMap::new(&[
+    ("\\atop", r"\\atopfrac"),
+    ("\\brace", r"\\bracefrac"),
+    ("\\brack", r"\\brackfrac"),
+    ("\\choose", "\\binom"),
+    ("\\over", "\\frac"),
+]);
 
 fn wrap_with_style(mut frac: ParseNodeGenfrac) -> ParseNode {
     let size = frac.size.take();

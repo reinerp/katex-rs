@@ -10,6 +10,7 @@ use crate::parser::parse_node::NodeType::{CdLabel, CdLabelParent};
 use crate::parser::parse_node::{
     ParseNodeAtom, ParseNodeCdLabel, ParseNodeCdLabelParent, ParseNodeTextOrd,
 };
+use crate::static_map::{Map, StrMap};
 use crate::types::CssProperty;
 use crate::units::make_em;
 use crate::{build_mathml, wrap_fragment};
@@ -28,18 +29,17 @@ use crate::{
     types::{BreakToken, Mode, ParseError, ParseErrorKind, TokenText},
     utils::push_and_get_mut,
 };
-use phf::phf_map;
 
 /// Arrow function name mapping for CD environment
-const CD_ARROW_FUNCTION_NAMES: phf::Map<&str, &str> = phf_map!(
-    ">" => "\\\\cdrightarrow",
-    "<" => "\\\\cdleftarrow",
-    "=" => "\\\\cdlongequal",
-    "A" => "\\uparrow",
-    "V" => "\\downarrow",
-    "|" => "\\Vert",
-    "." => "no arrow",
-);
+const CD_ARROW_FUNCTION_NAMES: Map<&str, &str> = StrMap::new(&[
+    (".", "no arrow"),
+    ("<", "\\\\cdleftarrow"),
+    ("=", "\\\\cdlongequal"),
+    (">", "\\\\cdrightarrow"),
+    ("A", "\\uparrow"),
+    ("V", "\\downarrow"),
+    ("|", "\\Vert"),
+]);
 
 /// Create an empty cell for CD environment
 const fn new_cell() -> ParseNode {

@@ -2,6 +2,7 @@
 //! This file contains font metric data and measurements for KaTeX
 //! Generated from the original JavaScript fontMetricsData.js using phf macros
 
+use crate::static_map::{Map, StrMap, U32Map};
 use crate::{ParseError, font_metrics::MetricMap, namespace::KeyMap, types::ParseErrorKind};
 
 /// Font metrics for a single character

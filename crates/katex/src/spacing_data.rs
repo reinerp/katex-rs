@@ -4,7 +4,7 @@
 //! and layout. It contains spacing relationships between different classes of
 //! atoms.
 
-use phf::{Map, phf_map};
+use crate::static_map::{Map, StrMap};
 
 /// Measurement structure representing a size with number and unit in
 /// mathematical typesetting.
@@ -216,57 +216,78 @@ pub type Spacings = Map<&'static str, Map<&'static str, MeasurementStatic>>;
 /// - [`TIGHT_SPACINGS`] for script and scriptscript styles
 /// - [`AtomClass`] for atom classification details
 /// - [TeX spacing rules](https://www.tug.org/TUGboat/tb30-1/tb94vieth.pdf)
-pub const SPACINGS: Spacings = phf_map! {
-    "mord" => phf_map! {
-        "mop" => THINSPACE,
-        "mbin" => MEDIUMSPACE,
-        "mrel" => THICKSPACE,
-        "minner" => THINSPACE,
-    },
-    "mop" => phf_map! {
-        "mord" => THINSPACE,
-        "mop" => THINSPACE,
-        "mrel" => THICKSPACE,
-        "minner" => THINSPACE,
-    },
-    "mbin" => phf_map! {
-        "mord" => MEDIUMSPACE,
-        "mop" => MEDIUMSPACE,
-        "mopen" => MEDIUMSPACE,
-        "minner" => MEDIUMSPACE,
-    },
-    "mrel" => phf_map! {
-        "mord" => THICKSPACE,
-        "mop" => THICKSPACE,
-        "mopen" => THICKSPACE,
-        "minner" => THICKSPACE,
-    },
-    "mopen" => phf_map!{},
-    "mclose" => phf_map! {
-        "mop" => THINSPACE,
-        "mbin" => MEDIUMSPACE,
-        "mrel" => THICKSPACE,
-        "minner" => THINSPACE,
-    },
-    "mpunct" => phf_map! {
-        "mord" => THINSPACE,
-        "mop" => THINSPACE,
-        "mrel" => THICKSPACE,
-        "mopen" => THINSPACE,
-        "mclose" => THINSPACE,
-        "mpunct" => THINSPACE,
-        "minner" => THINSPACE,
-    },
-    "minner" => phf_map! {
-        "mord" => THINSPACE,
-        "mop" => THINSPACE,
-        "mbin" => MEDIUMSPACE,
-        "mrel" => THICKSPACE,
-        "mopen" => THINSPACE,
-        "mpunct" => THINSPACE,
-        "minner" => THINSPACE,
-    },
-};
+pub const SPACINGS: Spacings = StrMap::new(&[
+    (
+        "mbin",
+        StrMap::new(&[
+            ("minner", MEDIUMSPACE),
+            ("mop", MEDIUMSPACE),
+            ("mopen", MEDIUMSPACE),
+            ("mord", MEDIUMSPACE),
+        ]),
+    ),
+    (
+        "mclose",
+        StrMap::new(&[
+            ("mbin", MEDIUMSPACE),
+            ("minner", THINSPACE),
+            ("mop", THINSPACE),
+            ("mrel", THICKSPACE),
+        ]),
+    ),
+    (
+        "minner",
+        StrMap::new(&[
+            ("mbin", MEDIUMSPACE),
+            ("minner", THINSPACE),
+            ("mop", THINSPACE),
+            ("mopen", THINSPACE),
+            ("mord", THINSPACE),
+            ("mpunct", THINSPACE),
+            ("mrel", THICKSPACE),
+        ]),
+    ),
+    (
+        "mop",
+        StrMap::new(&[
+            ("minner", THINSPACE),
+            ("mop", THINSPACE),
+            ("mord", THINSPACE),
+            ("mrel", THICKSPACE),
+        ]),
+    ),
+    ("mopen", StrMap::new(&[])),
+    (
+        "mord",
+        StrMap::new(&[
+            ("mbin", MEDIUMSPACE),
+            ("minner", THINSPACE),
+            ("mop", THINSPACE),
+            ("mrel", THICKSPACE),
+        ]),
+    ),
+    (
+        "mpunct",
+        StrMap::new(&[
+            ("mclose", THINSPACE),
+            ("minner", THINSPACE),
+            ("mop", THINSPACE),
+            ("mopen", THINSPACE),
+            ("mord", THINSPACE),
+            ("mpunct", THINSPACE),
+            ("mrel", THICKSPACE),
+        ]),
+    ),
+    (
+        "mrel",
+        StrMap::new(&[
+            ("minner", THICKSPACE),
+            ("mop", THICKSPACE),
+            ("mopen", THICKSPACE),
+            ("mord", THICKSPACE),
+        ]),
+    ),
+]);
 
 /// Spacing relationships for script and scriptscript styles in mathematical
 /// typesetting.
@@ -289,25 +310,19 @@ pub const SPACINGS: Spacings = phf_map! {
 /// - [`SPACINGS`] for display and text style spacing
 /// - [`AtomClass`] for atom classification
 /// - LaTeX's `\scriptstyle` and `\scriptscriptstyle` commands
-pub const TIGHT_SPACINGS: Spacings = phf_map! {
-    "mord" => phf_map! {
-        "mop" => THINSPACE,
-    },
-    "mop" => phf_map! {
-        "mord" => THINSPACE,
-        "mop" => THINSPACE,
-    },
-    "mbin" => phf_map!{},
-    "mrel" => phf_map!{},
-    "mopen" => phf_map!{},
-    "mclose" => phf_map! {
-        "mop" => THINSPACE,
-    },
-    "mpunct" => phf_map!{},
-    "minner" => phf_map! {
-        "mop" => THINSPACE,
-    },
-};
+pub const TIGHT_SPACINGS: Spacings = StrMap::new(&[
+    ("mbin", StrMap::new(&[])),
+    ("mclose", StrMap::new(&[("mop", THINSPACE)])),
+    ("minner", StrMap::new(&[("mop", THINSPACE)])),
+    (
+        "mop",
+        StrMap::new(&[("mop", THINSPACE), ("mord", THINSPACE)]),
+    ),
+    ("mopen", StrMap::new(&[])),
+    ("mord", StrMap::new(&[("mop", THINSPACE)])),
+    ("mpunct", StrMap::new(&[])),
+    ("mrel", StrMap::new(&[])),
+]);
 
 #[cfg(test)]
 mod tests {

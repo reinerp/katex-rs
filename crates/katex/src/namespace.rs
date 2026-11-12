@@ -5,6 +5,7 @@
 //! which can be set either globally or local to a nested group using an
 //! undo stack similar to how TeX implements this functionality.
 
+use crate::static_map::Map;
 use core::cell::RefMut;
 
 use std::collections::{HashMap, HashSet};
@@ -29,7 +30,7 @@ pub struct Namespace<'a, V: Clone + 'static> {
     /// local changes modify, with undos recorded on the stack.
     current: RefMut<'a, Mapping<V>>,
     /// Built-in immutable mappings that never change.
-    builtins: &'static phf::Map<&'static str, V>,
+    builtins: &'static Map<&'static str, V>,
     /// Stack of undo maps for nested groups. The stored value is the previous
     /// value of a name (or `None` to indicate deletion) to restore on pop.
     undef_stack: Vec<KeyMap<String, Option<V>>>,
@@ -41,7 +42,7 @@ impl<'a, V: Clone> Namespace<'a, V> {
     /// - `global` initializes the mutable global mapping
     #[must_use]
     pub const fn new(
-        builtins: &'static phf::Map<&'static str, V>,
+        builtins: &'static Map<&'static str, V>,
         global: RefMut<'a, Mapping<V>>,
     ) -> Self {
         Self {

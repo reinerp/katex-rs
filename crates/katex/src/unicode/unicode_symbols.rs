@@ -4,6 +4,8 @@
 //! by applying combining diacritical marks to base characters and normalizing
 //! them using Unicode NFC normalization.
 
+use crate::static_map::{CharMap, Map};
+
 include!(concat!(env!("OUT_DIR"), "/unicode_symbols_phf.rs"));
 
 #[cfg(test)]

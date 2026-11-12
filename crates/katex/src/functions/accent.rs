@@ -3,6 +3,7 @@
 //! This module handles accent symbols in mathematical expressions,
 //! migrated from KaTeX's accent.js.
 
+use crate::static_map::{Set, StrSet};
 use alloc::borrow::Cow;
 use alloc::vec;
 
@@ -23,13 +24,21 @@ use crate::types::{
 };
 use crate::units::make_em;
 use crate::{KatexContext, build_html, build_mathml};
-use phf::phf_set;
 
 /// Non-stretchy accent commands that should not be stretched to fit their base
-static NON_STRETCHY_ACCENTS: phf::Set<&'static str> = phf_set! {
-    "\\acute", "\\grave", "\\ddot", "\\tilde", "\\bar", "\\breve",
-    "\\check", "\\hat", "\\vec", "\\dot", "\\mathring"
-};
+static NON_STRETCHY_ACCENTS: Set<&'static str> = StrSet::new(&[
+    "\\acute",
+    "\\bar",
+    "\\breve",
+    "\\check",
+    "\\ddot",
+    "\\dot",
+    "\\grave",
+    "\\hat",
+    "\\mathring",
+    "\\tilde",
+    "\\vec",
+]);
 
 /// Math mode accent commands
 const MATH_ACCENTS: &[&str] = &[

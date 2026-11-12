@@ -7,6 +7,7 @@ use crate::context::KatexContext;
 use crate::lexer::Lexer;
 use crate::macros::builtins::BUILTIN_MACROS;
 use crate::namespace::{KeyMap, Namespace};
+use crate::static_map::{Set, StrSet};
 use crate::types::TokenText;
 use crate::types::{
     ErrorLocationProvider, LexerInterface as _, Mode, ParseError, ParseErrorKind, Settings,
@@ -24,32 +25,27 @@ pub type MacroMap = KeyMap<String, MacroDefinition>;
 
 /// Commands that act like macros but aren't defined as a macro, function, or
 /// symbol
-pub const IMPLICIT_COMMANDS: phf::Set<&str> = phf::phf_set! {
-    "^",
-    "_",
-    "\\limits",
-    "\\nolimits",
-};
+pub const IMPLICIT_COMMANDS: Set<&str> = StrSet::new(&["\\limits", "\\nolimits", "^", "_"]);
 
 /// Commands that define or alias macros, rejected in the input when
 /// [`Settings::allow_macro_definitions`] is `false`. The names starting with
 /// two backslashes are internal forms of `\global` combinations.
-pub const MACRO_DEFINITION_COMMANDS: phf::Set<&str> = phf::phf_set! {
+pub const MACRO_DEFINITION_COMMANDS: Set<&str> = StrSet::new(&[
+    "\\\\globalfuture",
+    "\\\\globallet",
+    "\\\\globallong",
     "\\def",
-    "\\gdef",
     "\\edef",
-    "\\xdef",
-    "\\let",
     "\\futurelet",
+    "\\gdef",
     "\\global",
+    "\\let",
     "\\long",
     "\\newcommand",
-    "\\renewcommand",
     "\\providecommand",
-    "\\\\globallong",
-    "\\\\globallet",
-    "\\\\globalfuture",
-};
+    "\\renewcommand",
+    "\\xdef",
+]);
 
 /// MacroExpander: expands macros until only non-macro tokens remain
 pub struct MacroExpander<'a> {

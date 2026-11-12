@@ -9,29 +9,29 @@ use crate::dom_tree::HtmlDomNode;
 use crate::mathml_tree::MathDomNode;
 use crate::options::{FontShape, FontWeight, Options};
 use crate::parser::parse_node::{NodeType, ParseNode, ParseNodeText};
+use crate::static_map::{Map, StrMap};
 use crate::types::{ArgType, Mode, ParseError, ParseErrorKind};
 use crate::{ClassList, build_html, build_mathml};
-use phf::phf_map;
 
 /// Text font families mapping
-static TEXT_FONT_FAMILIES: phf::Map<&'static str, &'static str> = phf_map! {
-    "\\textrm" => "textrm",
-    "\\textsf" => "textsf",
-    "\\texttt" => "texttt",
-    "\\textnormal" => "textrm",
-};
+static TEXT_FONT_FAMILIES: Map<&'static str, &'static str> = StrMap::new(&[
+    ("\\textnormal", "textrm"),
+    ("\\textrm", "textrm"),
+    ("\\textsf", "textsf"),
+    ("\\texttt", "texttt"),
+]);
 
 /// Text font weights mapping
-static TEXT_FONT_WEIGHTS: phf::Map<&'static str, FontWeight> = phf_map! {
-    "\\textbf" => FontWeight::TextBf,
-    "\\textmd" => FontWeight::TextMd,
-};
+static TEXT_FONT_WEIGHTS: Map<&'static str, FontWeight> = StrMap::new(&[
+    ("\\textbf", FontWeight::TextBf),
+    ("\\textmd", FontWeight::TextMd),
+]);
 
 /// Text font shapes mapping
-static TEXT_FONT_SHAPES: phf::Map<&'static str, FontShape> = phf_map! {
-    "\\textit" => FontShape::TextIt,
-    "\\textup" => FontShape::TextUp,
-};
+static TEXT_FONT_SHAPES: Map<&'static str, FontShape> = StrMap::new(&[
+    ("\\textit", FontShape::TextIt),
+    ("\\textup", FontShape::TextUp),
+]);
 
 /// Creates options with font applied based on the group font
 fn options_with_font(group: &ParseNodeText, options: &Options) -> Options {

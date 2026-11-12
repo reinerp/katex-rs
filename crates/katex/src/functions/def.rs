@@ -9,11 +9,10 @@
 //! parser's token stream, which is not available through the current
 //! FunctionContext API.
 
-use phf::phf_map;
-
 use crate::context::KatexContext;
 use crate::define_function::{FunctionDefSpec, FunctionPropSpec};
 use crate::parser::parse_node::{NodeType, ParseNode, ParseNodeInternal};
+use crate::static_map::{Map, StrMap};
 
 use crate::macros::{MacroContextInterface as _, MacroDefinition, MacroExpansion};
 use crate::types::{ParseError, ParseErrorKind, Token};
@@ -30,17 +29,17 @@ pub fn define_def(ctx: &mut KatexContext) {
     define_futurelet_cmd(ctx);
 }
 
-const GLOBAL_MAP: phf::Map<&str, &str> = phf_map!(
-    "\\global" => "\\global",
-    "\\long" => "\\\\globallong",
-    "\\\\globallong" => "\\\\globallong",
-    "\\def" => "\\gdef",
-    "\\gdef" => "\\gdef",
-    "\\edef" => "\\xdef",
-    "\\xdef" => "\\xdef",
-    "\\let" => "\\\\globallet",
-    "\\futurelet" => "\\\\globalfuture",
-);
+const GLOBAL_MAP: Map<&str, &str> = StrMap::new(&[
+    ("\\\\globallong", "\\\\globallong"),
+    ("\\def", "\\gdef"),
+    ("\\edef", "\\xdef"),
+    ("\\futurelet", "\\\\globalfuture"),
+    ("\\gdef", "\\gdef"),
+    ("\\global", "\\global"),
+    ("\\let", "\\\\globallet"),
+    ("\\long", "\\\\globallong"),
+    ("\\xdef", "\\xdef"),
+]);
 
 /// Register the \global prefix command
 fn define_global(ctx: &mut KatexContext) {

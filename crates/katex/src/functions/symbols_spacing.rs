@@ -10,24 +10,22 @@ use crate::dom_tree::HtmlDomNode;
 use crate::mathml_tree::{MathDomNode, MathNode, MathNodeType, TextNode};
 use crate::options::Options;
 use crate::parser::parse_node::{NodeType, ParseNode};
+use crate::static_map::{Map, StrMap};
 use crate::types::{Mode, ParseError, ParseErrorKind};
 use alloc::borrow::Cow;
-use phf::phf_map;
 
 /// CSS-based spacing functions mapped to their CSS class names
-static CSS_SPACE: phf::Map<&'static str, &'static str> = phf_map! {
-    "\\nobreak" => "nobreak",
-    "\\allowbreak" => "allowbreak",
-};
+static CSS_SPACE: Map<&'static str, &'static str> =
+    StrMap::new(&[("\\allowbreak", "allowbreak"), ("\\nobreak", "nobreak")]);
 
 /// Regular space functions with optional CSS class names
-static REGULAR_SPACE: phf::Map<&'static str, Option<&'static str>> = phf_map! {
-    " " => None,
-    "\\ " => None,
-    "~" => Some("nobreak"),
-    "\\space" => None,
-    "\\nobreakspace" => Some("nobreak"),
-};
+static REGULAR_SPACE: Map<&'static str, Option<&'static str>> = StrMap::new(&[
+    (" ", None),
+    ("\\ ", None),
+    ("\\nobreakspace", Some("nobreak")),
+    ("\\space", None),
+    ("~", Some("nobreak")),
+]);
 
 /// HTML builder for spacing elements
 fn html_builder(

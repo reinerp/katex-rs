@@ -34,6 +34,7 @@ pub mod parse_tree;
 /// Core parsing logic for LaTeX mathematical expressions.
 pub mod parser;
 pub mod spacing_data;
+pub mod static_map;
 pub mod stretchy;
 pub mod style;
 pub mod svg_geometry;

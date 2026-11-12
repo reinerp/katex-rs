@@ -10,31 +10,42 @@
 use crate::KatexContext;
 use crate::options::Options;
 use crate::spacing_data::Measurement;
+use crate::static_map::{Map, Set, StrMap, StrSet};
 use crate::types::{ParseError, ParseErrorKind};
 use core::fmt::Write as _;
-use phf::phf_set;
 
-const RELATIVE_UNITS: phf::Set<&'static str> = phf_set!("ex", "em", "mu");
+const RELATIVE_UNITS: Set<&'static str> = StrSet::new(&["em", "ex", "mu"]);
 
 /// Return TeX points per unit for absolute TeX units.
 /// See KaTeX src/units.js `ptPerUnit` for reference values.
-const PT_PER_UNIT: phf::Map<&'static str, f64> = phf::phf_map! {
+const PT_PER_UNIT: Map<&'static str, f64> = StrMap::new(&[
+    // inch
+    // https://tex.stackexchange.com/a/41371
+    ("bp", 803.0 / 800.0),
+    // didot
+    ("cc", 14856.0 / 1157.0),
+    // millimeter
+    ("cm", 7227.0 / 254.0),
+    // pica
+    ("dd", 1238.0 / 1157.0),
+    // centimeter
+    ("in", 72.27),
+    // TeX point
+    ("mm", 7227.0 / 2540.0),
+    // new didot
+    ("nc", 1370.0 / 107.0),
+    // cicero (12 didot)
+    ("nd", 685.0 / 642.0),
+    // big (PostScript) points
+    // \pdfpxdimen defaults to 1 bp in pdfTeX and LuaTeX
+    ("pc", 12.0),
     // https://en.wikibooks.org/wiki/LaTeX/Lengths
     // https://tex.stackexchange.com/a/8263
-    "pt" => 1.0,             // TeX point
-    "mm" => 7227.0 / 2540.0, // millimeter
-    "cm" => 7227.0 / 254.0,  // centimeter
-    "in" => 72.27,           // inch
-    // https://tex.stackexchange.com/a/41371
-    "bp" | "px" => 803.0 / 800.0, // big (PostScript) points
-    // \pdfpxdimen defaults to 1 bp in pdfTeX and LuaTeX
-    "pc" => 12.0,             // pica
-    "dd" => 1238.0 / 1157.0,  // didot
-    "cc" => 14856.0 / 1157.0, // cicero (12 didot)
-    "nd" => 685.0 / 642.0,    // new didot
-    "nc" => 1370.0 / 107.0,   // new cicero (12 new didot)
-    "sp" => 1.0 / 65536.0,    // scaled point (TeX's internal smallest unit)
-};
+    ("pt", 1.0),
+    ("px", 803.0 / 800.0),
+    // new cicero (12 new didot)
+    ("sp", 1.0 / 65536.0),
+]);
 
 /// Check whether a unit string is a valid length unit understood by KaTeX.
 pub fn valid_unit_str<T>(unit: T) -> bool

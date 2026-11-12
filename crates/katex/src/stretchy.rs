@@ -5,6 +5,7 @@
 //! for creating SVG spans, enclosing spans, and MathML nodes for stretchy
 //! symbols.
 
+use crate::static_map::{Map, Set, StrMap, StrSet};
 use alloc::borrow::Cow;
 
 use crate::ParseError;
@@ -18,55 +19,54 @@ use crate::types::ClassList;
 use crate::types::CssProperty;
 use crate::types::ParseErrorKind;
 use crate::units::make_em;
-use phf::{phf_map, phf_set};
 
 /// Code point mapping for stretchy symbols
-pub const STRETCHY_CODE_POINT: phf::Map<&'static str, &'static str> = phf_map! {
-    "widehat" => "^",
-    "widecheck" => "\u{2c7}",
-    "widetilde" => "~",
-    "utilde" => "~",
-    "overleftarrow" => "\u{2190}",
-    "underleftarrow" => "\u{2190}",
-    "xleftarrow" => "\u{2190}",
-    "overrightarrow" => "\u{2192}",
-    "underrightarrow" => "\u{2192}",
-    "xrightarrow" => "\u{2192}",
-    "underbrace" => "\u{23df}",
-    "overbrace" => "\u{23de}",
-    "overbracket" => "\u{23b4}",
-    "underbracket" => "\u{23b5}",
-    "overgroup" => "\u{23e0}",
-    "undergroup" => "\u{23e1}",
-    "overleftrightarrow" => "\u{2194}",
-    "underleftrightarrow" => "\u{2194}",
-    "xleftrightarrow" => "\u{2194}",
-    "Overrightarrow" => "\u{21d2}",
-    "xRightarrow" => "\u{21d2}",
-    "overleftharpoon" => "\u{21bc}",
-    "xleftharpoonup" => "\u{21bc}",
-    "overrightharpoon" => "\u{21c0}",
-    "xrightharpoonup" => "\u{21c0}",
-    "xLeftarrow" => "\u{21d0}",
-    "xLeftrightarrow" => "\u{21d4}",
-    "xhookleftarrow" => "\u{21a9}",
-    "xhookrightarrow" => "\u{21aa}",
-    "xmapsto" => "\u{21a6}",
-    "xrightharpoondown" => "\u{21c1}",
-    "xleftharpoondown" => "\u{21bd}",
-    "xrightleftharpoons" => "\u{21cc}",
-    "xleftrightharpoons" => "\u{21cb}",
-    "xtwoheadleftarrow" => "\u{219e}",
-    "xtwoheadrightarrow" => "\u{21a0}",
-    "xlongequal" => "=",
-    "xtofrom" => "\u{21c4}",
-    "xrightleftarrows" => "\u{21c4}",
-    "xrightequilibrium" => "\u{21cc}",
-    "xleftequilibrium" => "\u{21cb}",
-    "cdrightarrow" => "\u{2192}",
-    "cdleftarrow" => "\u{2190}",
-    "cdlongequal" => "=",
-};
+pub const STRETCHY_CODE_POINT: Map<&'static str, &'static str> = StrMap::new(&[
+    ("Overrightarrow", "\u{21d2}"),
+    ("cdleftarrow", "\u{2190}"),
+    ("cdlongequal", "="),
+    ("cdrightarrow", "\u{2192}"),
+    ("overbrace", "\u{23de}"),
+    ("overbracket", "\u{23b4}"),
+    ("overgroup", "\u{23e0}"),
+    ("overleftarrow", "\u{2190}"),
+    ("overleftharpoon", "\u{21bc}"),
+    ("overleftrightarrow", "\u{2194}"),
+    ("overrightarrow", "\u{2192}"),
+    ("overrightharpoon", "\u{21c0}"),
+    ("underbrace", "\u{23df}"),
+    ("underbracket", "\u{23b5}"),
+    ("undergroup", "\u{23e1}"),
+    ("underleftarrow", "\u{2190}"),
+    ("underleftrightarrow", "\u{2194}"),
+    ("underrightarrow", "\u{2192}"),
+    ("utilde", "~"),
+    ("widecheck", "\u{2c7}"),
+    ("widehat", "^"),
+    ("widetilde", "~"),
+    ("xLeftarrow", "\u{21d0}"),
+    ("xLeftrightarrow", "\u{21d4}"),
+    ("xRightarrow", "\u{21d2}"),
+    ("xhookleftarrow", "\u{21a9}"),
+    ("xhookrightarrow", "\u{21aa}"),
+    ("xleftarrow", "\u{2190}"),
+    ("xleftequilibrium", "\u{21cb}"),
+    ("xleftharpoondown", "\u{21bd}"),
+    ("xleftharpoonup", "\u{21bc}"),
+    ("xleftrightarrow", "\u{2194}"),
+    ("xleftrightharpoons", "\u{21cb}"),
+    ("xlongequal", "="),
+    ("xmapsto", "\u{21a6}"),
+    ("xrightarrow", "\u{2192}"),
+    ("xrightequilibrium", "\u{21cc}"),
+    ("xrightharpoondown", "\u{21c1}"),
+    ("xrightharpoonup", "\u{21c0}"),
+    ("xrightleftarrows", "\u{21c4}"),
+    ("xrightleftharpoons", "\u{21cc}"),
+    ("xtofrom", "\u{21c4}"),
+    ("xtwoheadleftarrow", "\u{219e}"),
+    ("xtwoheadrightarrow", "\u{21a0}"),
+]);
 
 /// Data structure for image information
 #[derive(Debug, Clone)]
@@ -99,50 +99,206 @@ impl ImageData {
     }
 }
 
-const IMAGES_DATA: phf::Map<&'static str, ImageData> = phf_map! {
-    "overbracket" => ImageData::new(&["leftbracketover", "rightbracketover"], 1.6, 440.0, None),
-    "underbracket" => ImageData::new(&["leftbracketunder", "rightbracketunder"], 1.6, 410.0, None),
-    "overrightarrow" => ImageData::new(&["rightarrow"], 0.888, 522.0, Some("xMaxYMin")),
-    "overleftarrow" => ImageData::new(&["leftarrow"], 0.888, 522.0, Some("xMinYMin")),
-    "underrightarrow" => ImageData::new(&["rightarrow"], 0.888, 522.0, Some("xMaxYMin")),
-    "underleftarrow" => ImageData::new(&["leftarrow"], 0.888, 522.0, Some("xMinYMin")),
-    "xrightarrow" => ImageData::new(&["rightarrow"], 1.469, 522.0, Some("xMaxYMin")),
-    "\\cdrightarrow" => ImageData::new(&["rightarrow"], 3.0, 522.0, Some("xMaxYMin")),
-    "xleftarrow" => ImageData::new(&["leftarrow"], 1.469, 522.0, Some("xMinYMin")),
-    "\\cdleftarrow" => ImageData::new(&["leftarrow"], 3.0, 522.0, Some("xMinYMin")),
-    "Overrightarrow" => ImageData::new(&["doublerightarrow"], 0.888, 560.0, Some("xMaxYMin")),
-    "xRightarrow" => ImageData::new(&["doublerightarrow"], 1.526, 560.0, Some("xMaxYMin")),
-    "xLeftarrow" => ImageData::new(&["doubleleftarrow"], 1.526, 560.0, Some("xMinYMin")),
-    "overleftharpoon" => ImageData::new(&["leftharpoon"], 0.888, 522.0, Some("xMinYMin")),
-    "xleftharpoonup" => ImageData::new(&["leftharpoon"], 0.888, 522.0, Some("xMinYMin")),
-    "xleftharpoondown" => ImageData::new(&["leftharpoondown"], 0.888, 522.0, Some("xMinYMin")),
-    "overrightharpoon" => ImageData::new(&["rightharpoon"], 0.888, 522.0, Some("xMaxYMin")),
-    "xrightharpoonup" => ImageData::new(&["rightharpoon"], 0.888, 522.0, Some("xMaxYMin")),
-    "xrightharpoondown" => ImageData::new(&["rightharpoondown"], 0.888, 522.0, Some("xMaxYMin")),
-    "xlongequal" => ImageData::new(&["longequal"], 0.888, 334.0, Some("xMinYMin")),
-    "\\cdlongequal" => ImageData::new(&["longequal"], 3.0, 334.0, Some("xMinYMin")),
-    "xtwoheadleftarrow" => ImageData::new(&["twoheadleftarrow"], 0.888, 334.0, Some("xMinYMin")),
-    "xtwoheadrightarrow" => ImageData::new(&["twoheadrightarrow"], 0.888, 334.0, Some("xMaxYMin")),
-    "overleftrightarrow" => ImageData::new(&["leftarrow", "rightarrow"], 0.888, 522.0, None),
-    "overbrace" => ImageData::new(&["leftbrace", "midbrace", "rightbrace"], 1.6, 548.0, None),
-    "underbrace" => ImageData::new(&["leftbraceunder", "midbraceunder", "rightbraceunder"], 1.6, 548.0, None),
-    "underleftrightarrow" => ImageData::new(&["leftarrow", "rightarrow"], 0.888, 522.0, None),
-    "xleftrightarrow" => ImageData::new(&["leftarrow", "rightarrow"], 1.75, 522.0, None),
-    "xLeftrightarrow" => ImageData::new(&["doubleleftarrow", "doublerightarrow"], 1.75, 560.0, None),
-    "xrightleftharpoons" => ImageData::new(&["leftharpoondownplus", "rightharpoonplus"], 1.75, 716.0, None),
-    "xleftrightharpoons" => ImageData::new(&["leftharpoonplus", "rightharpoondownplus"], 1.75, 716.0, None),
-    "xhookleftarrow" => ImageData::new(&["leftarrow", "righthook"], 1.08, 522.0, None),
-    "xhookrightarrow" => ImageData::new(&["lefthook", "rightarrow"], 1.08, 522.0, None),
-    "overlinesegment" => ImageData::new(&["leftlinesegment", "rightlinesegment"], 0.888, 522.0, None),
-    "underlinesegment" => ImageData::new(&["leftlinesegment", "rightlinesegment"], 0.888, 522.0, None),
-    "overgroup" => ImageData::new(&["leftgroup", "rightgroup"], 0.888, 342.0, None),
-    "undergroup" => ImageData::new(&["leftgroupunder", "rightgroupunder"], 0.888, 342.0, None),
-    "xmapsto" => ImageData::new(&["leftmapsto", "rightarrow"], 1.5, 522.0, None),
-    "xtofrom" => ImageData::new(&["leftToFrom", "rightToFrom"], 1.75, 528.0, None),
-    "xrightleftarrows" => ImageData::new(&["baraboveleftarrow", "rightarrowabovebar"], 1.75, 901.0, None),
-    "xrightequilibrium" => ImageData::new(&["baraboveshortleftharpoon", "rightharpoonaboveshortbar"], 1.75, 716.0, None),
-    "xleftequilibrium" => ImageData::new(&["shortbaraboveleftharpoon", "shortrightharpoonabovebar"], 1.75, 716.0, None),
-};
+const IMAGES_DATA: Map<&'static str, ImageData> = StrMap::new(&[
+    (
+        "Overrightarrow",
+        ImageData::new(&["doublerightarrow"], 0.888, 560.0, Some("xMaxYMin")),
+    ),
+    (
+        "\\cdleftarrow",
+        ImageData::new(&["leftarrow"], 3.0, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "\\cdlongequal",
+        ImageData::new(&["longequal"], 3.0, 334.0, Some("xMinYMin")),
+    ),
+    (
+        "\\cdrightarrow",
+        ImageData::new(&["rightarrow"], 3.0, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "overbrace",
+        ImageData::new(&["leftbrace", "midbrace", "rightbrace"], 1.6, 548.0, None),
+    ),
+    (
+        "overbracket",
+        ImageData::new(&["leftbracketover", "rightbracketover"], 1.6, 440.0, None),
+    ),
+    (
+        "overgroup",
+        ImageData::new(&["leftgroup", "rightgroup"], 0.888, 342.0, None),
+    ),
+    (
+        "overleftarrow",
+        ImageData::new(&["leftarrow"], 0.888, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "overleftharpoon",
+        ImageData::new(&["leftharpoon"], 0.888, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "overleftrightarrow",
+        ImageData::new(&["leftarrow", "rightarrow"], 0.888, 522.0, None),
+    ),
+    (
+        "overlinesegment",
+        ImageData::new(&["leftlinesegment", "rightlinesegment"], 0.888, 522.0, None),
+    ),
+    (
+        "overrightarrow",
+        ImageData::new(&["rightarrow"], 0.888, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "overrightharpoon",
+        ImageData::new(&["rightharpoon"], 0.888, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "underbrace",
+        ImageData::new(
+            &["leftbraceunder", "midbraceunder", "rightbraceunder"],
+            1.6,
+            548.0,
+            None,
+        ),
+    ),
+    (
+        "underbracket",
+        ImageData::new(&["leftbracketunder", "rightbracketunder"], 1.6, 410.0, None),
+    ),
+    (
+        "undergroup",
+        ImageData::new(&["leftgroupunder", "rightgroupunder"], 0.888, 342.0, None),
+    ),
+    (
+        "underleftarrow",
+        ImageData::new(&["leftarrow"], 0.888, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "underleftrightarrow",
+        ImageData::new(&["leftarrow", "rightarrow"], 0.888, 522.0, None),
+    ),
+    (
+        "underlinesegment",
+        ImageData::new(&["leftlinesegment", "rightlinesegment"], 0.888, 522.0, None),
+    ),
+    (
+        "underrightarrow",
+        ImageData::new(&["rightarrow"], 0.888, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "xLeftarrow",
+        ImageData::new(&["doubleleftarrow"], 1.526, 560.0, Some("xMinYMin")),
+    ),
+    (
+        "xLeftrightarrow",
+        ImageData::new(&["doubleleftarrow", "doublerightarrow"], 1.75, 560.0, None),
+    ),
+    (
+        "xRightarrow",
+        ImageData::new(&["doublerightarrow"], 1.526, 560.0, Some("xMaxYMin")),
+    ),
+    (
+        "xhookleftarrow",
+        ImageData::new(&["leftarrow", "righthook"], 1.08, 522.0, None),
+    ),
+    (
+        "xhookrightarrow",
+        ImageData::new(&["lefthook", "rightarrow"], 1.08, 522.0, None),
+    ),
+    (
+        "xleftarrow",
+        ImageData::new(&["leftarrow"], 1.469, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "xleftequilibrium",
+        ImageData::new(
+            &["shortbaraboveleftharpoon", "shortrightharpoonabovebar"],
+            1.75,
+            716.0,
+            None,
+        ),
+    ),
+    (
+        "xleftharpoondown",
+        ImageData::new(&["leftharpoondown"], 0.888, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "xleftharpoonup",
+        ImageData::new(&["leftharpoon"], 0.888, 522.0, Some("xMinYMin")),
+    ),
+    (
+        "xleftrightarrow",
+        ImageData::new(&["leftarrow", "rightarrow"], 1.75, 522.0, None),
+    ),
+    (
+        "xleftrightharpoons",
+        ImageData::new(
+            &["leftharpoonplus", "rightharpoondownplus"],
+            1.75,
+            716.0,
+            None,
+        ),
+    ),
+    (
+        "xlongequal",
+        ImageData::new(&["longequal"], 0.888, 334.0, Some("xMinYMin")),
+    ),
+    (
+        "xmapsto",
+        ImageData::new(&["leftmapsto", "rightarrow"], 1.5, 522.0, None),
+    ),
+    (
+        "xrightarrow",
+        ImageData::new(&["rightarrow"], 1.469, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "xrightequilibrium",
+        ImageData::new(
+            &["baraboveshortleftharpoon", "rightharpoonaboveshortbar"],
+            1.75,
+            716.0,
+            None,
+        ),
+    ),
+    (
+        "xrightharpoondown",
+        ImageData::new(&["rightharpoondown"], 0.888, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "xrightharpoonup",
+        ImageData::new(&["rightharpoon"], 0.888, 522.0, Some("xMaxYMin")),
+    ),
+    (
+        "xrightleftarrows",
+        ImageData::new(
+            &["baraboveleftarrow", "rightarrowabovebar"],
+            1.75,
+            901.0,
+            None,
+        ),
+    ),
+    (
+        "xrightleftharpoons",
+        ImageData::new(
+            &["leftharpoondownplus", "rightharpoonplus"],
+            1.75,
+            716.0,
+            None,
+        ),
+    ),
+    (
+        "xtofrom",
+        ImageData::new(&["leftToFrom", "rightToFrom"], 1.75, 528.0, None),
+    ),
+    (
+        "xtwoheadleftarrow",
+        ImageData::new(&["twoheadleftarrow"], 0.888, 334.0, Some("xMinYMin")),
+    ),
+    (
+        "xtwoheadrightarrow",
+        ImageData::new(&["twoheadrightarrow"], 0.888, 334.0, Some("xMaxYMin")),
+    ),
+]);
 
 /// Calculate the length of an ordgroup parse node
 const fn group_length(arg: &AnyParseNode) -> usize {
@@ -153,13 +309,10 @@ const fn group_length(arg: &AnyParseNode) -> usize {
     }
 }
 
-const ACCENT_STRETCHY: phf::Set<&'static str> = phf_set! {
-    "widehat", "widecheck", "widetilde", "utilde"
-};
+const ACCENT_STRETCHY: Set<&'static str> =
+    StrSet::new(&["utilde", "widecheck", "widehat", "widetilde"]);
 
-const ACCENT_STRETCHY_OVER: phf::Set<&'static str> = phf_set! {
-    "widehat", "widecheck"
-};
+const ACCENT_STRETCHY_OVER: Set<&'static str> = StrSet::new(&["widecheck", "widehat"]);
 
 /// Create an SVG span for stretchy elements
 pub fn svg_span(group: &AnyParseNode, options: &Options) -> Result<HtmlDomNode, ParseError> {

@@ -5,9 +5,8 @@
 //! mathematical symbols. It handles the complex logic for choosing appropriate
 //! delimiter sizes and styles based on the content they surround.
 
+use crate::static_map::{Set, StrSet};
 use alloc::borrow::Cow;
-
-use phf::{Set, phf_set};
 
 use crate::types::AttributeMap;
 
@@ -924,47 +923,47 @@ pub fn left_right_delim<T: Into<ClassList>>(
 
 // Delimiter classification arrays
 
-const STACK_LARGE_DELIMITERS: Set<&str> = phf_set!(
-    "(", "\\lparen", ")", "\\rparen", "[", "\\lbrack", "]", "\\rbrack", "\\{", "\\lbrace", "\\}",
-    "\\rbrace", "\\lfloor", "\\rfloor", "\u{230a}", "\u{230b}", "\\lceil", "\\rceil", "\u{2308}",
-    "\u{2309}", "\\surd",
-);
+const STACK_LARGE_DELIMITERS: Set<&str> = StrSet::new(&[
+    "(", ")", "[", "\\lbrace", "\\lbrack", "\\lceil", "\\lfloor", "\\lparen", "\\rbrace",
+    "\\rbrack", "\\rceil", "\\rfloor", "\\rparen", "\\surd", "\\{", "\\}", "]", "\u{2308}",
+    "\u{2309}", "\u{230a}", "\u{230b}",
+]);
 
-const STACK_ALWAYS_DELIMITERS: Set<&str> = phf_set!(
-    "\\uparrow",
-    "\\downarrow",
-    "\\updownarrow",
-    "\\Uparrow",
+const STACK_ALWAYS_DELIMITERS: Set<&str> = StrSet::new(&[
     "\\Downarrow",
+    "\\Uparrow",
     "\\Updownarrow",
-    "|",
-    "\\|",
-    "\\vert",
     "\\Vert",
-    "\\lvert",
-    "\\rvert",
+    "\\downarrow",
     "\\lVert",
-    "\\rVert",
     "\\lgroup",
-    "\\rgroup",
-    "\u{27ee}",
-    "\u{27ef}",
     "\\lmoustache",
+    "\\lvert",
+    "\\rVert",
+    "\\rgroup",
     "\\rmoustache",
+    "\\rvert",
+    "\\uparrow",
+    "\\updownarrow",
+    "\\vert",
+    "\\|",
+    "|",
     "\u{23b0}",
     "\u{23b1}",
-);
+    "\u{27ee}",
+    "\u{27ef}",
+]);
 
-const STACK_NEVER_DELIMITERS: Set<&str> = phf_set!(
+const STACK_NEVER_DELIMITERS: Set<&str> = StrSet::new(&[
+    "/",
     "<",
     ">",
-    "\\langle",
-    "\\rangle",
-    "/",
     "\\backslash",
-    "\\lt",
     "\\gt",
-);
+    "\\langle",
+    "\\lt",
+    "\\rangle",
+]);
 
 const STACK_NEVER_DELIMITER_SEQUENCE: &[DelimiterType] = &[
     DelimiterType::Small(SCRIPTSCRIPT),

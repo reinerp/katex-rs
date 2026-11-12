@@ -4,6 +4,7 @@
 //! extra data. They can then be transformed into real DOM nodes with the
 //! `to_node` function or HTML markup using `to_markup`.
 
+use crate::static_map::{Map, StrMap};
 use core::fmt::{self, Write as _};
 
 use crate::ParseError;
@@ -13,7 +14,6 @@ use crate::types::ParseErrorKind;
 #[cfg(feature = "wasm")]
 use crate::web_context::WebContext;
 use core::marker::PhantomData;
-use phf::phf_map;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::UnwrapThrowExt as _;
 #[cfg(feature = "wasm")]
@@ -360,12 +360,12 @@ impl From<SymbolNode> for HtmlDomNode {
     }
 }
 
-const I_COMBINATIONS: phf::Map<&str, &str> = phf_map! {
-    "\u{ee}" => "\u{0131}\u{0302}",
-    "\u{ef}" => "\u{0131}\u{0308}",
-    "\u{ed}" => "\u{0131}\u{0301}",
-    "\u{ec}" => "\u{0131}\u{0300}",
-};
+const I_COMBINATIONS: Map<&str, &str> = StrMap::new(&[
+    ("\u{ec}", "\u{0131}\u{0300}"),
+    ("\u{ed}", "\u{0131}\u{0301}"),
+    ("\u{ee}", "\u{0131}\u{0302}"),
+    ("\u{ef}", "\u{0131}\u{0308}"),
+]);
 
 /// Builder for [`SymbolNode`], returned by [`SymbolNode::builder`].
 #[must_use]

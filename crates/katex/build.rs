@@ -26,6 +26,9 @@ impl fmt::Display for BuildScriptError {
 
 impl CoreError for BuildScriptError {}
 
+#[path = "src/static_map.rs"]
+#[allow(dead_code, reason = "the build script only needs the table types")]
+mod static_map;
 #[path = "src/unicode/unicode_accents.rs"]
 mod unicode_accents;
 use unicode_accents::UNICODE_ACCENTS;
@@ -153,23 +156,21 @@ pub const FONT_METRICS: [FontMetrics; 3] = [
 }
 
 fn generate_font_metrics() -> BuildResult<String> {
-    use phf_codegen::Map as PhfMap;
-
     let json_data = fs::read_to_string("data/font_metrics_data.json")?;
     let font_metrics: BTreeMap<String, BTreeMap<String, Vec<f64>>> =
         serde_json::from_str(&json_data)?;
 
     let mut output = String::new();
-    let mut font_index = PhfMap::new();
+    let mut font_index = String::new();
 
     for (font_family, metrics) in font_metrics {
-        let font_name = font_family.replace(['-', '.'], "_");
-        font_index.entry(
-            font_family.clone(),
-            format!("&{}_METRICS", font_name.to_uppercase()),
+        let font_name = font_family.replace(['-', '.'], "_").to_uppercase();
+        let _ = writeln!(
+            &mut font_index,
+            "    (\"{font_family}\", &{font_name}_METRICS),"
         );
 
-        let mut map = PhfMap::new();
+        let mut entries = Vec::new();
         for (char_code_str, metrics_array) in metrics {
             let char_code: u32 = char_code_str.parse()?;
             let values = metrics_array
@@ -183,8 +184,9 @@ fn generate_font_metrics() -> BuildResult<String> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            map.entry(char_code, format!("CharacterMetrics::new({values})"));
+            entries.push((char_code, values));
         }
+        entries.sort_unstable_by_key(|(char_code, _)| *char_code);
 
         let _ = writeln!(
             &mut output,
@@ -192,10 +194,15 @@ fn generate_font_metrics() -> BuildResult<String> {
         );
         let _ = writeln!(
             &mut output,
-            "#[allow(clippy::expect_used)]\n#[allow(clippy::approx_constant)]\npub const {}_METRICS: phf::Map<u32, CharacterMetrics> = {};\n",
-            font_name.to_uppercase(),
-            map.build()
+            "#[allow(clippy::approx_constant)]\npub const {font_name}_METRICS: Map<u32, CharacterMetrics> = U32Map::new(&["
         );
+        for (char_code, values) in entries {
+            let _ = writeln!(
+                &mut output,
+                "    ({char_code}, CharacterMetrics::new({values})),"
+            );
+        }
+        let _ = writeln!(&mut output, "]);\n");
     }
 
     let _ = writeln!(
@@ -204,8 +211,7 @@ fn generate_font_metrics() -> BuildResult<String> {
     );
     let _ = writeln!(
         &mut output,
-        "#[allow(clippy::expect_used)]\n#[allow(clippy::non_ascii_literal)]\npub const FONT_METRICS_INDEX: phf::Map<&'static str, &'static phf::Map<u32, CharacterMetrics>> = \n{};\n",
-        font_index.build()
+        "pub const FONT_METRICS_INDEX: Map<&'static str, &'static Map<u32, CharacterMetrics>> = StrMap::new(&[\n{font_index}]);"
     );
 
     Ok(output)
@@ -213,13 +219,11 @@ fn generate_font_metrics() -> BuildResult<String> {
 
 #[allow(clippy::unnecessary_wraps)]
 fn generate_unicode_symbols() -> BuildResult<String> {
-    use phf_codegen::Map as PhfMap;
-
     let accents: Vec<char> = UNICODE_ACCENTS.keys().copied().collect();
     let letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\u{3b1}\u{3b2}\u{3b3}\u{3b4}\u{3b5}\u{3f5}\u{3b6}\u{3b7}\u{3b8}\u{3d1}\u{3b9}\u{3ba}\u{3bb}\u{3bc}\u{3bd}\u{3be}\u{3bf}\u{3c0}\u{3d6}\u{3c1}\u{3f1}\u{3c2}\u{3c3}\u{3c4}\u{3c5}\u{3c6}\u{3d5}\u{3c7}\u{3c8}\u{3c9}\u{393}\u{394}\u{398}\u{39b}\u{39e}\u{3a0}\u{3a3}\u{3a5}\u{3a6}\u{3a8}\u{3a9}";
 
     let mut seen = BTreeSet::new();
-    let mut map = PhfMap::<char>::new();
+    let mut map = BTreeMap::new();
 
     for letter in letters.chars() {
         for accent in &accents {
@@ -227,7 +231,7 @@ fn generate_unicode_symbols() -> BuildResult<String> {
             if let Some(normalized) = normalize_to_single_char(&combined)
                 && seen.insert(normalized)
             {
-                map.entry(normalized, format!("\"{}\"", escape_as_unicode(&combined)));
+                map.insert(normalized, escape_as_unicode(&combined));
             }
 
             for accent2 in &accents {
@@ -239,20 +243,28 @@ fn generate_unicode_symbols() -> BuildResult<String> {
                 if let Some(normalized) = normalize_to_single_char(&combined2)
                     && seen.insert(normalized)
                 {
-                    map.entry(normalized, format!("\"{}\"", escape_as_unicode(&combined2)));
+                    map.insert(normalized, escape_as_unicode(&combined2));
                 }
             }
         }
     }
 
-    Ok(format!(
+    let mut output = String::from(
         "/// Mapping of normalized Unicode symbols to their component parts
 /// Unicode symbols map for Modifier tone letters
-#[allow(clippy::expect_used)]
 #[allow(clippy::non_ascii_literal)]
-pub const UNICODE_SYMBOLS: phf::Map<char, &str> = \n{};\n",
-        map.build()
-    ))
+pub const UNICODE_SYMBOLS: Map<char, &str> = CharMap::new(&[
+",
+    );
+    for (symbol, parts) in map {
+        let _ = writeln!(
+            &mut output,
+            "    ('{}', \"{parts}\"),",
+            escape_as_unicode(&symbol.to_string())
+        );
+    }
+    output.push_str("]);\n");
+    Ok(output)
 }
 
 fn generate_symbols() -> BuildResult<String> {
@@ -357,6 +369,35 @@ fn convert_unicode_escapes(s: &str) -> String {
     result
 }
 
+/// Returns the string a Rust string literal with body `literal` denotes.
+fn unescape_literal(literal: &str) -> BuildResult<String> {
+    let mut out = String::new();
+    let mut chars = literal.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('\\') => out.push('\\'),
+            Some('"') => out.push('"'),
+            Some('\'') => out.push('\''),
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some('u') => {
+                let hex: String = chars.by_ref().skip(1).take_while(|&c| c != '}').collect();
+                let code = u32::from_str_radix(&hex, 16)?;
+                out.push(
+                    char::from_u32(code)
+                        .ok_or_else(|| BuildScriptError(format!("bad escape {hex}")))?,
+                );
+            }
+            other => return Err(BuildScriptError(format!("unsupported escape {other:?}")).into()),
+        }
+    }
+    Ok(out)
+}
+
 fn normalize_to_single_char(s: &str) -> Option<char> {
     use unicode_normalization::UnicodeNormalization as _;
 
@@ -385,18 +426,10 @@ fn write_symbols(buffer: &mut String, symbols: &[Symbol], variant: &str) -> Buil
         }
     }
 
-    let _ = writeln!(
-        buffer,
-        "const {variant}_MAP: phf::Map<&str, CharInfo> = phf_map!("
-    );
+    // (key value, key literal text, entry text), sorted by key value.
+    let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for ((font, group, replace), names) in grouped {
-        let arm = names
-            .into_iter()
-            .map(|s| convert_unicode_escapes(&s))
-            .collect::<Vec<_>>()
-            .join("\" | \"");
-
         let font_str = match font.as_str() {
             "main" => "Font::Main",
             "ams" => "Font::Ams",
@@ -426,14 +459,27 @@ fn write_symbols(buffer: &mut String, symbols: &[Symbol], variant: &str) -> Buil
                 |s| format!("Some(\'{}\')", convert_unicode_escapes(s)),
             );
 
-        let _ = writeln!(buffer, "    \"{arm}\" => CharInfo {{");
-        let _ = writeln!(buffer, "        font: {font_str},");
-        let _ = writeln!(buffer, "        group: {group_str},");
-        let _ = writeln!(buffer, "        replace: {replace_value},");
-        let _ = writeln!(buffer, "    }},");
+        let info = format!(
+            "CharInfo {{\n            font: {font_str},\n            group: {group_str},\n            replace: {replace_value},\n        }}"
+        );
+        for name in names {
+            let literal = convert_unicode_escapes(&name);
+            entries.push((unescape_literal(&literal)?, literal, info.clone()));
+        }
     }
+    entries.sort_unstable_by(|a, b| a.0.cmp(&b.0));
 
-    let _ = writeln!(buffer, ");\n");
+    let _ = writeln!(
+        buffer,
+        "const {variant}_MAP: Map<&str, CharInfo> = StrMap::new(&["
+    );
+    for (_, literal, info) in entries {
+        let _ = writeln!(
+            buffer,
+            "    (\n        \"{literal}\",\n        {info},\n    ),"
+        );
+    }
+    let _ = writeln!(buffer, "]);\n");
 
     Ok(())
 }

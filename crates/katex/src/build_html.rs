@@ -8,6 +8,7 @@ use crate::dom_tree::{DomSpan, HtmlDomNode};
 use crate::options::Options;
 use crate::parser::parse_node::AnyParseNode;
 use crate::spacing_data::{SPACINGS, TIGHT_SPACINGS};
+use crate::static_map::{Set, StrSet};
 use crate::types::ClassList;
 use crate::types::VariantNotFound;
 use crate::types::{CssProperty, ParseError, ParseErrorKind};
@@ -16,14 +17,13 @@ use crate::{KatexContext, build_common};
 use alloc::borrow::Cow;
 use core::mem;
 use core::str::FromStr;
-use phf::phf_set;
 
 // Binary atoms (first class `mbin`) change into ordinary atoms (`mord`)
 // depending on their surroundings. See TeXbook pg. 442-446, Rules 5 and 6,
 // and the text before Rule 19.
-const BIN_LEFT_CANCELLER: phf::Set<&str> =
-    phf_set!("leftmost", "mbin", "mopen", "mrel", "mop", "mpunct");
-const BIN_RIGHT_CANCELLER: phf::Set<&str> = phf_set!("rightmost", "mrel", "mclose", "mpunct");
+const BIN_LEFT_CANCELLER: Set<&str> =
+    StrSet::new(&["leftmost", "mbin", "mop", "mopen", "mpunct", "mrel"]);
+const BIN_RIGHT_CANCELLER: Set<&str> = StrSet::new(&["mclose", "mpunct", "mrel", "rightmost"]);
 
 /// DOM enum for atom classes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

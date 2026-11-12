@@ -13,6 +13,7 @@ use crate::font_metrics_data::CharacterMetrics;
 use crate::options::{FontShape, FontWeight, Options};
 use crate::parser::parse_node::AnyParseNode;
 use crate::spacing_data::Measurement;
+use crate::static_map::{Map, StrMap};
 use crate::symbols::{Font, Mode, is_ligature};
 use crate::tree::DocumentFragment;
 use crate::types::AttributeMap;
@@ -21,63 +22,101 @@ use crate::types::{CssProperty, CssStyle, ParseErrorKind};
 use crate::units::make_em;
 use crate::wide_character::get_wide_character_font;
 use alloc::borrow::Cow;
-use phf::phf_map;
 
 /// Font mapping for TeX font commands to font names and variants
-pub const FONT_MAP: phf::Map<&str, FontMapEntry> = phf_map! {
-    "mathbf" => FontMapEntry {
-        variant: "bold",
-        font_name: "Main-Bold",
-    },
-    "mathrm" => FontMapEntry {
-        variant: "normal",
-        font_name: "Main-Regular",
-    },
-    "textit" => FontMapEntry {
-        variant: "italic",
-        font_name: "Main-Italic",
-    },
-    "mathit" => FontMapEntry {
-        variant: "italic",
-        font_name: "Main-Italic",
-    },
-    "mathnormal" => FontMapEntry {
-        variant: "italic",
-        font_name: "Math-Italic",
-    },
-    "mathbb" => FontMapEntry {
-        variant: "double-struck",
-        font_name: "AMS-Regular",
-    },
-    "mathcal" => FontMapEntry {
-        variant: "script",
-        font_name: "Caligraphic-Regular",
-    },
-    "mathscr" => FontMapEntry {
-        variant: "script",
-        font_name: "Script-Regular",
-    },
-    "mathfrak" => FontMapEntry {
-        variant: "fraktur",
-        font_name: "Fraktur-Regular",
-    },
-    "mathsf" => FontMapEntry {
-        variant: "sans-serif",
-        font_name: "SansSerif-Regular",
-    },
-    "mathsfit" => FontMapEntry {
-        variant: "sans-serif-italic",
-        font_name: "SansSerif-Italic",
-    },
-    "mathtt" => FontMapEntry {
-        variant: "monospace",
-        font_name: "Typewriter-Regular",
-    },
-    "boldsymbol" => FontMapEntry {
-        variant: "bold-italic",
-        font_name: "Math-BoldItalic",
-    },
-};
+pub const FONT_MAP: Map<&str, FontMapEntry> = StrMap::new(&[
+    (
+        "boldsymbol",
+        FontMapEntry {
+            variant: "bold-italic",
+            font_name: "Math-BoldItalic",
+        },
+    ),
+    (
+        "mathbb",
+        FontMapEntry {
+            variant: "double-struck",
+            font_name: "AMS-Regular",
+        },
+    ),
+    (
+        "mathbf",
+        FontMapEntry {
+            variant: "bold",
+            font_name: "Main-Bold",
+        },
+    ),
+    (
+        "mathcal",
+        FontMapEntry {
+            variant: "script",
+            font_name: "Caligraphic-Regular",
+        },
+    ),
+    (
+        "mathfrak",
+        FontMapEntry {
+            variant: "fraktur",
+            font_name: "Fraktur-Regular",
+        },
+    ),
+    (
+        "mathit",
+        FontMapEntry {
+            variant: "italic",
+            font_name: "Main-Italic",
+        },
+    ),
+    (
+        "mathnormal",
+        FontMapEntry {
+            variant: "italic",
+            font_name: "Math-Italic",
+        },
+    ),
+    (
+        "mathrm",
+        FontMapEntry {
+            variant: "normal",
+            font_name: "Main-Regular",
+        },
+    ),
+    (
+        "mathscr",
+        FontMapEntry {
+            variant: "script",
+            font_name: "Script-Regular",
+        },
+    ),
+    (
+        "mathsf",
+        FontMapEntry {
+            variant: "sans-serif",
+            font_name: "SansSerif-Regular",
+        },
+    ),
+    (
+        "mathsfit",
+        FontMapEntry {
+            variant: "sans-serif-italic",
+            font_name: "SansSerif-Italic",
+        },
+    ),
+    (
+        "mathtt",
+        FontMapEntry {
+            variant: "monospace",
+            font_name: "Typewriter-Regular",
+        },
+    ),
+    (
+        "textit",
+        FontMapEntry {
+            variant: "italic",
+            font_name: "Main-Italic",
+        },
+    ),
+]);
 
 /// Font map entry structure
 #[derive(Debug, Clone)]
@@ -1122,15 +1161,15 @@ pub const OIIINT_SIZE2: (f64, f64) = (1.98, 0.659);
 /// Equivalent to KaTeX buildCommon.js svgData
 /// However, the values slightly differ because they are based on phf_map!
 /// Values are `path` => (width, height)
-const SVG_DATA: phf::Map<&'static str, (f64, f64)> = phf_map! {
-    // values from the font glyph
-    "vec" => VEC_SVG_DATA,
+const SVG_DATA: Map<&'static str, (f64, f64)> = StrMap::new(&[
+    ("oiiintSize1", OIIINT_SIZE1),
+    ("oiiintSize2", OIIINT_SIZE2),
     // oval to overlay the integrand
-    "oiintSize1" => OIINT_SIZE1,
-    "oiintSize2" => OIINT_SIZE2,
-    "oiiintSize1" => OIIINT_SIZE1,
-    "oiiintSize2" => OIIINT_SIZE2,
-};
+    ("oiintSize1", OIINT_SIZE1),
+    ("oiintSize2", OIINT_SIZE2),
+    // values from the font glyph
+    ("vec", VEC_SVG_DATA),
+]);
 
 /// Creates a static SVG span for elements like vec
 pub fn static_svg(path_name: &str, options: &Options) -> Result<DomSpan, ParseError> {
