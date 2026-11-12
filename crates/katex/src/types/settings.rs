@@ -1,8 +1,8 @@
 use core::cell::RefCell;
 use core::fmt;
 
+use crate::builder::optional_setters;
 use alloc::sync::Arc;
-use bon::bon;
 
 use crate::macro_expander::MacroMap;
 use crate::types::AttributeMap;
@@ -241,9 +241,83 @@ pub struct Settings {
     pub color: Option<String>,
 }
 
-#[bon]
-impl Settings {
-    /// Creates a new [`Settings`] instance from optional configuration values.
+/// Builder for [`Settings`], returned by [`Settings::builder`].
+#[must_use]
+#[derive(Default)]
+pub struct SettingsBuilder {
+    opt: SettingsOptional,
+}
+
+#[derive(Default)]
+struct SettingsOptional {
+    display_mode: Option<bool>,
+    output: Option<OutputFormat>,
+    leqno: Option<bool>,
+    fleqn: Option<bool>,
+    throw_on_error: Option<bool>,
+    error_color: Option<String>,
+    macros: Option<MacroMap>,
+    min_rule_thickness: Option<f64>,
+    color_is_text_color: Option<bool>,
+    strict: Option<StrictSetting>,
+    trust: Option<TrustSetting>,
+    max_size: Option<f64>,
+    max_expand: Option<usize>,
+    max_nesting: Option<usize>,
+    allow_macro_definitions: Option<bool>,
+    max_expanded_tokens: Option<usize>,
+    max_output_size: Option<usize>,
+    global_group: Option<bool>,
+    size_multiplier: Option<f64>,
+    color: Option<String>,
+}
+
+impl SettingsBuilder {
+    optional_setters! {
+        /// Display mode (true for block, false for inline).
+        display_mode / maybe_display_mode: bool;
+        /// Output format (HTML, MathML, or both).
+        output / maybe_output: OutputFormat;
+        /// Left equation numbers (true for left, false for right).
+        leqno / maybe_leqno: bool;
+        /// Left-aligned equations (true for left, false for centered).
+        fleqn / maybe_fleqn: bool;
+        /// Throw errors (true) or render them (false).
+        /// Default is true (throw on errors).
+        throw_on_error / maybe_throw_on_error: bool;
+        /// CSS color for rendering errors.
+        error_color / maybe_error_color: String;
+        /// Custom macro definitions.
+        macros / maybe_macros: MacroMap;
+        /// Minimum rule thickness in points.
+        min_rule_thickness / maybe_min_rule_thickness: f64;
+        /// Whether `\color` affects surrounding text color.
+        color_is_text_color / maybe_color_is_text_color: bool;
+        /// Strict mode configuration.
+        strict / maybe_strict: StrictSetting;
+        /// Trust configuration for dangerous content.
+        trust / maybe_trust: TrustSetting;
+        /// Maximum allowed size in points.
+        max_size / maybe_max_size: f64;
+        /// Maximum macro expansion iterations.
+        max_expand / maybe_max_expand: usize;
+        /// Maximum nesting depth of groups, commands and environments.
+        max_nesting / maybe_max_nesting: usize;
+        /// Whether the input may define macros (`\def`, `\newcommand`, ...).
+        allow_macro_definitions / maybe_allow_macro_definitions: bool;
+        /// Maximum number of tokens produced by macro expansion.
+        max_expanded_tokens / maybe_max_expanded_tokens: usize;
+        /// Maximum length in bytes of the rendered markup.
+        max_output_size / maybe_max_output_size: usize;
+        /// Whether settings persist globally across render calls.
+        global_group / maybe_global_group: bool;
+        /// Size multiplier for rendering (scaling factor).
+        size_multiplier / maybe_size_multiplier: f64;
+        /// Color for mathematical content.
+        color / maybe_color: String;
+    }
+
+    /// Builds the [`Settings`] from the values set so far.
     ///
     /// This constructor applies default values for any `None` options in the
     /// provided builder inputs, ensuring all settings have concrete
@@ -276,51 +350,30 @@ impl Settings {
     /// - `max_output_size`: `usize::MAX` (no limit)
     /// - `global_group`: `false`
     #[must_use]
-    #[builder]
-    pub fn new(
-        /// Display mode (true for block, false for inline).
-        display_mode: Option<bool>,
-        /// Output format (HTML, MathML, or both).
-        output: Option<OutputFormat>,
-        /// Left equation numbers (true for left, false for right).
-        leqno: Option<bool>,
-        /// Left-aligned equations (true for left, false for centered).
-        fleqn: Option<bool>,
-        /// Throw errors (true) or render them (false).
-        /// Default is true (throw on errors).
-        throw_on_error: Option<bool>,
-        /// CSS color for rendering errors.
-        error_color: Option<String>,
-        /// Custom macro definitions.
-        macros: Option<MacroMap>,
-        /// Minimum rule thickness in points.
-        min_rule_thickness: Option<f64>,
-        /// Whether `\color` affects surrounding text color.
-        color_is_text_color: Option<bool>,
-        /// Strict mode configuration.
-        strict: Option<StrictSetting>,
-        /// Trust configuration for dangerous content.
-        trust: Option<TrustSetting>,
-        /// Maximum allowed size in points.
-        max_size: Option<f64>,
-        /// Maximum macro expansion iterations.
-        max_expand: Option<usize>,
-        /// Maximum nesting depth of groups, commands and environments.
-        max_nesting: Option<usize>,
-        /// Whether the input may define macros (`\def`, `\newcommand`, ...).
-        allow_macro_definitions: Option<bool>,
-        /// Maximum number of tokens produced by macro expansion.
-        max_expanded_tokens: Option<usize>,
-        /// Maximum length in bytes of the rendered markup.
-        max_output_size: Option<usize>,
-        /// Whether settings persist globally across render calls.
-        global_group: Option<bool>,
-        /// Size multiplier for rendering (scaling factor).
-        size_multiplier: Option<f64>,
-        /// Color for mathematical content.
-        color: Option<String>,
-    ) -> Self {
-        Self {
+    pub fn build(self) -> Settings {
+        let SettingsOptional {
+            display_mode,
+            output,
+            leqno,
+            fleqn,
+            throw_on_error,
+            error_color,
+            macros,
+            min_rule_thickness,
+            color_is_text_color,
+            strict,
+            trust,
+            max_size,
+            max_expand,
+            max_nesting,
+            allow_macro_definitions,
+            max_expanded_tokens,
+            max_output_size,
+            global_group,
+            size_multiplier,
+            color,
+        } = self.opt;
+        Settings {
             display_mode: display_mode.unwrap_or(false),
             output: output.unwrap_or(OutputFormat::HtmlAndMathml),
             leqno: leqno.unwrap_or(false),
@@ -342,6 +395,14 @@ impl Settings {
             size_multiplier: size_multiplier.unwrap_or(1.0),
             color,
         }
+    }
+}
+
+impl Settings {
+    /// Returns a builder for [`Settings`]; unset values take the defaults
+    /// listed on [`SettingsBuilder::build`].
+    pub fn builder() -> SettingsBuilder {
+        SettingsBuilder::default()
     }
 
     /// Reports non-standard LaTeX input according to the current strict

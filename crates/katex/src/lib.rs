@@ -14,6 +14,7 @@ pub mod build_common;
 pub mod build_html;
 pub mod build_mathml;
 pub mod build_tree;
+pub mod builder;
 pub mod context;
 pub mod core;
 pub mod define_environment;

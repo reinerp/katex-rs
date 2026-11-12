@@ -5,6 +5,7 @@
 //! objects are immutable and provide methods for creating new Options with
 //! different properties when recursing through the parsing process.
 
+use crate::builder::{Unset, optional_setters};
 use crate::style::TEXT;
 use crate::types::{BUILD_LEVELS_PER_NESTING_LEVEL, ParseError, ParseErrorKind};
 use crate::{
@@ -12,7 +13,6 @@ use crate::{
     style::Style,
 };
 use alloc::borrow::Cow;
-use bon::bon;
 use core::cmp;
 use core::ptr;
 use core::sync::atomic::{AtomicUsize, Ordering};
@@ -212,40 +212,113 @@ pub struct Options {
     pub build_depth: BuildDepth,
 }
 
-#[bon]
-impl Options {
-    #[builder]
-    /// Create a new Options instance with builder
-    pub fn new(
-        style: &'static Style,
-        color: Option<String>,
-        size: Option<usize>,
-        text_size: Option<usize>,
-        phantom: Option<bool>,
-        font: Option<String>,
-        font_family: Option<String>,
-        font_weight: Option<FontWeight>,
-        font_shape: Option<FontShape>,
-        max_size: f64,
-        min_rule_thickness: f64,
-    ) -> Self {
-        let size = size.unwrap_or(Self::BASESIZE);
+/// Builder for [`Options`], returned by [`Options::builder`]. `style`,
+/// `max_size` and `min_rule_thickness` are required.
+#[must_use]
+pub struct OptionsBuilder<S = Unset, M = Unset, R = Unset> {
+    style: S,
+    max_size: M,
+    min_rule_thickness: R,
+    opt: OptionsOptional,
+}
+
+#[derive(Default)]
+struct OptionsOptional {
+    color: Option<String>,
+    size: Option<usize>,
+    text_size: Option<usize>,
+    phantom: Option<bool>,
+    font: Option<String>,
+    font_family: Option<String>,
+    font_weight: Option<FontWeight>,
+    font_shape: Option<FontShape>,
+}
+
+impl<S, M, R> OptionsBuilder<S, M, R> {
+    /// Math style
+    pub fn style(self, style: &'static Style) -> OptionsBuilder<&'static Style, M, R> {
+        OptionsBuilder {
+            style,
+            max_size: self.max_size,
+            min_rule_thickness: self.min_rule_thickness,
+            opt: self.opt,
+        }
+    }
+
+    /// Maximum size
+    pub fn max_size(self, max_size: f64) -> OptionsBuilder<S, f64, R> {
+        OptionsBuilder {
+            style: self.style,
+            max_size,
+            min_rule_thickness: self.min_rule_thickness,
+            opt: self.opt,
+        }
+    }
+
+    /// Minimum rule thickness
+    pub fn min_rule_thickness(self, min_rule_thickness: f64) -> OptionsBuilder<S, M, f64> {
+        OptionsBuilder {
+            style: self.style,
+            max_size: self.max_size,
+            min_rule_thickness,
+            opt: self.opt,
+        }
+    }
+
+    optional_setters! {
+        /// Text color
+        color / maybe_color: String;
+        /// Size index
+        size / maybe_size: usize;
+        /// Text size index
+        text_size / maybe_text_size: usize;
+        /// Whether the content is a phantom
+        phantom / maybe_phantom: bool;
+        /// Font
+        font / maybe_font: String;
+        /// Font family
+        font_family / maybe_font_family: String;
+        /// Font weight
+        font_weight / maybe_font_weight: FontWeight;
+        /// Font shape
+        font_shape / maybe_font_shape: FontShape;
+    }
+}
+
+impl OptionsBuilder<&'static Style, f64, f64> {
+    /// Builds the options.
+    #[must_use]
+    pub fn build(self) -> Options {
+        let opt = self.opt;
+        let size = opt.size.unwrap_or(Options::BASESIZE);
         let multiplier_idx = cmp::min(size, SIZE_MULTIPLIERS.len());
         let size_multiplier = SIZE_MULTIPLIERS[multiplier_idx - 1];
-        Self {
-            style,
-            color,
+        Options {
+            style: self.style,
+            color: opt.color,
             size,
-            text_size: text_size.unwrap_or(size),
-            phantom: phantom.unwrap_or(false),
-            font: font.unwrap_or_default(),
-            font_family: font_family.unwrap_or_default(),
-            font_weight: font_weight.unwrap_or(FontWeight::Empty),
-            font_shape: font_shape.unwrap_or(FontShape::Empty),
+            text_size: opt.text_size.unwrap_or(size),
+            phantom: opt.phantom.unwrap_or(false),
+            font: opt.font.unwrap_or_default(),
+            font_family: opt.font_family.unwrap_or_default(),
+            font_weight: opt.font_weight.unwrap_or(FontWeight::Empty),
+            font_shape: opt.font_shape.unwrap_or(FontShape::Empty),
             size_multiplier,
-            max_size,
-            min_rule_thickness,
+            max_size: self.max_size,
+            min_rule_thickness: self.min_rule_thickness,
             build_depth: BuildDepth::default(),
+        }
+    }
+}
+
+impl Options {
+    /// Create a new Options instance with builder
+    pub fn builder() -> OptionsBuilder {
+        OptionsBuilder {
+            style: Unset,
+            max_size: Unset,
+            min_rule_thickness: Unset,
+            opt: OptionsOptional::default(),
         }
     }
 }

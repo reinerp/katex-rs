@@ -6,6 +6,7 @@
 //! any of the styling state that the plain DOM nodes do.
 
 use crate::ParseError;
+use crate::builder::{Unset, optional_setters};
 #[cfg(feature = "wasm")]
 use crate::dom_tree::create_class;
 use crate::tree::{DocumentFragment, MarkupStep, VirtualNode, write_tree_markup};
@@ -14,7 +15,6 @@ use crate::units::make_em;
 use crate::utils::escape_into;
 #[cfg(feature = "wasm")]
 use crate::web_context::WebContext;
-use bon::bon;
 use core::fmt::{self, Debug, Write as _};
 use strum::AsRefStr;
 #[cfg(feature = "wasm")]
@@ -195,25 +195,59 @@ impl Debug for MathNode {
     }
 }
 
-#[bon]
+/// Builder for [`MathNode`], returned by [`MathNode::builder`].
+#[must_use]
+pub struct MathNodeBuilder<N = Unset> {
+    node_type: N,
+    opt: MathNodeOptional,
+}
+
+#[derive(Default)]
+struct MathNodeOptional {
+    attributes: Option<AttributeMap>,
+    children: Option<Vec<MathDomNode>>,
+    classes: Option<ClassList>,
+}
+
+impl<N> MathNodeBuilder<N> {
+    /// Node type
+    pub fn node_type(self, node_type: MathNodeType) -> MathNodeBuilder<MathNodeType> {
+        MathNodeBuilder {
+            node_type,
+            opt: self.opt,
+        }
+    }
+
+    optional_setters! {
+        /// Node attributes
+        attributes / maybe_attributes: AttributeMap;
+        /// Child nodes
+        children / maybe_children: Vec<MathDomNode>;
+        /// CSS classes
+        classes / maybe_classes: ClassList;
+    }
+}
+
+impl MathNodeBuilder<MathNodeType> {
+    /// Builds the node.
+    #[must_use]
+    pub fn build(self) -> MathNode {
+        let opt = self.opt;
+        MathNode {
+            node_type: self.node_type,
+            attributes: opt.attributes.unwrap_or_default(),
+            children: opt.children.unwrap_or_default(),
+            classes: opt.classes.unwrap_or_default(),
+        }
+    }
+}
+
 impl MathNode {
     /// Create a new MathNode with the given type
-    #[builder]
-    pub fn new(
-        /// Node type
-        node_type: MathNodeType,
-        /// Node attributes
-        attributes: Option<AttributeMap>,
-        /// Child nodes
-        children: Option<Vec<MathDomNode>>,
-        /// CSS classes
-        classes: Option<ClassList>,
-    ) -> Self {
-        Self {
-            node_type,
-            attributes: attributes.unwrap_or_default(),
-            children: children.unwrap_or_default(),
-            classes: classes.unwrap_or_default(),
+    pub fn builder() -> MathNodeBuilder {
+        MathNodeBuilder {
+            node_type: Unset,
+            opt: MathNodeOptional::default(),
         }
     }
 

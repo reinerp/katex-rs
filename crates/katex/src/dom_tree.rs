@@ -7,11 +7,12 @@
 use core::fmt::{self, Write as _};
 
 use crate::ParseError;
+use crate::builder::{Unset, optional_setters};
 use crate::types::AttributeMap;
 use crate::types::ParseErrorKind;
 #[cfg(feature = "wasm")]
 use crate::web_context::WebContext;
-use bon::bon;
+use core::marker::PhantomData;
 use phf::phf_map;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::UnwrapThrowExt as _;
@@ -56,45 +57,72 @@ pub struct Span<T> {
     pub italic: Option<f64>,
 }
 
-#[bon]
-/// Builder for creating a new Span
-impl<T> Span<T> {
-    #[builder]
-    /// Create a new Span with builder
-    #[expect(clippy::option_option)]
-    pub fn new(
-        /// Options for building the span
-        #[builder(finish_fn)]
-        options: Option<&Options>,
-        /// Child nodes contained within this span
-        children: Vec<T>,
-        /// Attributes for this span element
-        attributes: Option<AttributeMap>,
-        /// Classes applied to this span
-        classes: Option<ClassList>,
-        /// Height of this span element
-        height: Option<f64>,
-        /// Depth of this span element
-        depth: Option<f64>,
-        /// Optional width of this span element
-        width: Option<Option<f64>>,
-        /// Maximum font size used in this span
-        max_font_size: Option<f64>,
-        /// Inline CSS style object
-        style: Option<CssStyle>,
-        /// `is_middle` tuple
-        is_middle: Option<(String, Options)>,
-    ) -> Self {
-        let mut span = Self {
+/// Builder for [`Span`], returned by [`Span::builder`].
+#[must_use]
+pub struct SpanBuilder<T, C = Unset> {
+    children: C,
+    opt: SpanOptional,
+    marker: PhantomData<T>,
+}
+
+#[derive(Default)]
+#[allow(clippy::option_option)]
+struct SpanOptional {
+    attributes: Option<AttributeMap>,
+    classes: Option<ClassList>,
+    height: Option<f64>,
+    depth: Option<f64>,
+    width: Option<Option<f64>>,
+    max_font_size: Option<f64>,
+    style: Option<CssStyle>,
+    is_middle: Option<(String, Options)>,
+}
+
+impl<T, C> SpanBuilder<T, C> {
+    /// Child nodes contained within this span
+    pub fn children(self, children: Vec<T>) -> SpanBuilder<T, Vec<T>> {
+        SpanBuilder {
             children,
-            attributes: attributes.unwrap_or_default(),
-            classes: classes.unwrap_or_default(),
-            height: height.unwrap_or_default(),
-            depth: depth.unwrap_or_default(),
-            width: width.unwrap_or(None),
-            max_font_size: max_font_size.unwrap_or_default(),
-            style: style.unwrap_or_default(),
-            is_middle,
+            opt: self.opt,
+            marker: PhantomData,
+        }
+    }
+
+    optional_setters! {
+        /// Attributes for this span element
+        attributes / maybe_attributes: AttributeMap;
+        /// Classes applied to this span
+        classes / maybe_classes: ClassList;
+        /// Height of this span element
+        height / maybe_height: f64;
+        /// Depth of this span element
+        depth / maybe_depth: f64;
+        /// Optional width of this span element
+        width / maybe_width: Option<f64>;
+        /// Maximum font size used in this span
+        max_font_size / maybe_max_font_size: f64;
+        /// Inline CSS style object
+        style / maybe_style: CssStyle;
+        /// `is_middle` tuple
+        is_middle / maybe_is_middle: (String, Options);
+    }
+}
+
+impl<T> SpanBuilder<T, Vec<T>> {
+    /// Builds the span, applying `options` (classes and style) if given.
+    #[must_use]
+    pub fn build(self, options: Option<&Options>) -> Span<T> {
+        let opt = self.opt;
+        let mut span = Span {
+            children: self.children,
+            attributes: opt.attributes.unwrap_or_default(),
+            classes: opt.classes.unwrap_or_default(),
+            height: opt.height.unwrap_or_default(),
+            depth: opt.depth.unwrap_or_default(),
+            width: opt.width.unwrap_or(None),
+            max_font_size: opt.max_font_size.unwrap_or_default(),
+            style: opt.style.unwrap_or_default(),
+            is_middle: opt.is_middle,
             italic: None,
         };
 
@@ -103,6 +131,17 @@ impl<T> Span<T> {
         }
 
         span
+    }
+}
+
+impl<T> Span<T> {
+    /// Create a new Span with builder
+    pub fn builder() -> SpanBuilder<T> {
+        SpanBuilder {
+            children: Unset,
+            opt: SpanOptional::default(),
+            marker: PhantomData,
+        }
     }
 
     /// Fast path constructor for callers that already have the common pieces
@@ -159,37 +198,54 @@ impl From<Anchor> for HtmlDomNode {
     }
 }
 
-#[bon]
-impl Anchor {
-    #[builder]
-    /// Create a new Anchor element with builder
-    pub fn new(
-        /// Options for building the anchor
-        #[builder(finish_fn)]
-        options: Option<&Options>,
+/// Builder for [`Anchor`], returned by [`Anchor::builder`].
+#[must_use]
+#[derive(Default)]
+pub struct AnchorBuilder {
+    opt: AnchorOptional,
+}
+
+#[derive(Default)]
+struct AnchorOptional {
+    children: Option<Vec<HtmlDomNode>>,
+    attributes: Option<AttributeMap>,
+    classes: Option<ClassList>,
+    height: Option<f64>,
+    depth: Option<f64>,
+    max_font_size: Option<f64>,
+    style: Option<CssStyle>,
+}
+
+impl AnchorBuilder {
+    optional_setters! {
         /// Child nodes contained within this anchor
-        children: Option<Vec<HtmlDomNode>>,
+        children / maybe_children: Vec<HtmlDomNode>;
         /// HTML attributes for this anchor element
-        attributes: Option<AttributeMap>,
+        attributes / maybe_attributes: AttributeMap;
         /// Classes applied to this anchor
-        classes: Option<ClassList>,
+        classes / maybe_classes: ClassList;
         /// Height of this anchor element
-        height: Option<f64>,
+        height / maybe_height: f64;
         /// Depth of this anchor element
-        depth: Option<f64>,
+        depth / maybe_depth: f64;
         /// Maximum font size used in this anchor
-        max_font_size: Option<f64>,
+        max_font_size / maybe_max_font_size: f64;
         /// Inline CSS style object
-        style: Option<CssStyle>,
-    ) -> Self {
-        let mut anchor = Self {
-            children: children.unwrap_or_default(),
-            attributes: attributes.unwrap_or_default(),
-            classes: classes.unwrap_or_default(),
-            height: height.unwrap_or_default(),
-            depth: depth.unwrap_or_default(),
-            max_font_size: max_font_size.unwrap_or_default(),
-            style: style.unwrap_or_default(),
+        style / maybe_style: CssStyle;
+    }
+
+    /// Builds the anchor, applying `options` (classes and style) if given.
+    #[must_use]
+    pub fn build(self, options: Option<&Options>) -> Anchor {
+        let opt = self.opt;
+        let mut anchor = Anchor {
+            children: opt.children.unwrap_or_default(),
+            attributes: opt.attributes.unwrap_or_default(),
+            classes: opt.classes.unwrap_or_default(),
+            height: opt.height.unwrap_or_default(),
+            depth: opt.depth.unwrap_or_default(),
+            max_font_size: opt.max_font_size.unwrap_or_default(),
+            style: opt.style.unwrap_or_default(),
         };
 
         if let Some(options) = options {
@@ -197,6 +253,13 @@ impl Anchor {
         }
 
         anchor
+    }
+}
+
+impl Anchor {
+    /// Create a new Anchor element with builder
+    pub fn builder() -> AnchorBuilder {
+        AnchorBuilder::default()
     }
 }
 
@@ -304,30 +367,79 @@ const I_COMBINATIONS: phf::Map<&str, &str> = phf_map! {
     "\u{ec}" => "\u{0131}\u{0300}",
 };
 
-#[bon]
+/// Builder for [`SymbolNode`], returned by [`SymbolNode::builder`].
+#[must_use]
+pub struct SymbolNodeBuilder<S = Unset> {
+    text: S,
+    opt: SymbolNodeOptional,
+}
+
+#[derive(Default)]
+struct SymbolNodeOptional {
+    height: Option<f64>,
+    depth: Option<f64>,
+    italic: Option<f64>,
+    skew: Option<f64>,
+    width: Option<f64>,
+    max_font_size: Option<f64>,
+    classes: Option<ClassList>,
+    style: Option<CssStyle>,
+}
+
 impl SymbolNode {
     /// Create a new Symbol
-    #[builder]
-    pub fn new(
-        /// Symbol text for the node
-        text: &str,
+    pub fn builder() -> SymbolNodeBuilder {
+        SymbolNodeBuilder {
+            text: Unset,
+            opt: SymbolNodeOptional::default(),
+        }
+    }
+}
+
+impl<S> SymbolNodeBuilder<S> {
+    /// Symbol text for the node
+    pub fn text(self, text: &str) -> SymbolNodeBuilder<&str> {
+        SymbolNodeBuilder {
+            text,
+            opt: self.opt,
+        }
+    }
+
+    optional_setters! {
         /// Height of the symbol
-        height: Option<f64>,
+        height / maybe_height: f64;
         /// Depth of the symbol
-        depth: Option<f64>,
+        depth / maybe_depth: f64;
         /// Italic correction value
-        italic: Option<f64>,
+        italic / maybe_italic: f64;
         /// Skew correction value
-        skew: Option<f64>,
+        skew / maybe_skew: f64;
         /// Width of the symbol
-        width: Option<f64>,
+        width / maybe_width: f64;
         /// Maximum font size used in this symbol
-        max_font_size: Option<f64>,
+        max_font_size / maybe_max_font_size: f64;
         /// Classes applied to this symbol
-        classes: Option<ClassList>,
+        classes / maybe_classes: ClassList;
         /// Inline CSS style object
-        style: Option<CssStyle>,
-    ) -> Self {
+        style / maybe_style: CssStyle;
+    }
+}
+
+impl SymbolNodeBuilder<&str> {
+    /// Builds the symbol node.
+    #[must_use]
+    pub fn build(self) -> SymbolNode {
+        let text = self.text;
+        let SymbolNodeOptional {
+            height,
+            depth,
+            italic,
+            skew,
+            width,
+            max_font_size,
+            classes,
+            style,
+        } = self.opt;
         let mut classes = classes.unwrap_or_default();
 
         // Mark text from non-Latin scripts with specific classes so that we
@@ -348,7 +460,7 @@ impl SymbolNode {
             .get(text)
             .map_or_else(|| text.to_owned(), ToString::to_string);
 
-        Self {
+        SymbolNode {
             is_text_ord: false,
             text,
             height: height.unwrap_or_default(),
@@ -438,19 +550,50 @@ pub struct SvgNode {
     pub attributes: AttributeMap,
 }
 
-#[bon]
+/// Builder for [`SvgNode`], returned by [`SvgNode::builder`].
+#[must_use]
+pub struct SvgNodeBuilder<C = Unset> {
+    children: C,
+    opt: SvgNodeOptional,
+}
+
+#[derive(Default)]
+struct SvgNodeOptional {
+    attributes: Option<AttributeMap>,
+}
+
 impl SvgNode {
     /// Create a new SvgNode
-    #[builder]
-    pub fn new(
-        /// Children for the SVG node
-        children: Vec<SvgChildNode>,
-        /// Attributes for the SVG node
-        attributes: Option<AttributeMap>,
-    ) -> Self {
-        Self {
+    pub fn builder() -> SvgNodeBuilder {
+        SvgNodeBuilder {
+            children: Unset,
+            opt: SvgNodeOptional::default(),
+        }
+    }
+}
+
+impl<C> SvgNodeBuilder<C> {
+    /// Children for the SVG node
+    pub fn children(self, children: Vec<SvgChildNode>) -> SvgNodeBuilder<Vec<SvgChildNode>> {
+        SvgNodeBuilder {
             children,
-            attributes: attributes.unwrap_or_default(),
+            opt: self.opt,
+        }
+    }
+
+    optional_setters! {
+        /// Attributes for the SVG node
+        attributes / maybe_attributes: AttributeMap;
+    }
+}
+
+impl SvgNodeBuilder<Vec<SvgChildNode>> {
+    /// Builds the SVG node.
+    #[must_use]
+    pub fn build(self) -> SvgNode {
+        SvgNode {
+            children: self.children,
+            attributes: self.opt.attributes.unwrap_or_default(),
         }
     }
 }

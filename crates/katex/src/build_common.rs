@@ -5,6 +5,7 @@
 //! and other DOM elements with proper styling and metrics.
 
 use crate::ParseError;
+use crate::builder::{Unset, optional_setters};
 use crate::context::KatexContext;
 use crate::dom_tree::{Anchor, DomSpan, HtmlDomFragment, HtmlDomNode, Span, SvgNode, SymbolNode};
 use crate::font_metrics::get_character_metrics;
@@ -20,7 +21,6 @@ use crate::types::{CssProperty, CssStyle, ParseErrorKind};
 use crate::units::make_em;
 use crate::wide_character::get_wide_character_font;
 use alloc::borrow::Cow;
-use bon::bon;
 use phf::phf_map;
 
 /// Font mapping for TeX font commands to font names and variants
@@ -98,7 +98,7 @@ pub struct SymbolLookup {
 }
 
 /// Element for vertical list
-#[derive(Debug, bon::Builder)]
+#[derive(Debug)]
 pub struct VListElem {
     /// The HTML DOM node element
     pub elem: HtmlDomNode,
@@ -112,6 +112,71 @@ pub struct VListElem {
     pub wrapper_classes: Option<ClassList>,
     /// Optional wrapper style
     pub wrapper_style: Option<CssStyle>,
+}
+
+/// Builder for [`VListElem`], returned by [`VListElem::builder`].
+#[must_use]
+pub struct VListElemBuilder<E = Unset> {
+    elem: E,
+    opt: VListElemOptional,
+}
+
+#[derive(Default)]
+struct VListElemOptional {
+    shift: Option<f64>,
+    margin_left: Option<String>,
+    margin_right: Option<String>,
+    wrapper_classes: Option<ClassList>,
+    wrapper_style: Option<CssStyle>,
+}
+
+impl VListElem {
+    /// Returns a builder for a vertical list element.
+    pub fn builder() -> VListElemBuilder {
+        VListElemBuilder {
+            elem: Unset,
+            opt: VListElemOptional::default(),
+        }
+    }
+}
+
+impl<E> VListElemBuilder<E> {
+    /// The HTML DOM node element
+    pub fn elem(self, elem: HtmlDomNode) -> VListElemBuilder<HtmlDomNode> {
+        VListElemBuilder {
+            elem,
+            opt: self.opt,
+        }
+    }
+
+    optional_setters! {
+        /// Optional shift amount
+        shift / maybe_shift: f64;
+        /// Optional left margin
+        margin_left / maybe_margin_left: String;
+        /// Optional right margin
+        margin_right / maybe_margin_right: String;
+        /// Optional wrapper classes
+        wrapper_classes / maybe_wrapper_classes: ClassList;
+        /// Optional wrapper style
+        wrapper_style / maybe_wrapper_style: CssStyle;
+    }
+}
+
+impl VListElemBuilder<HtmlDomNode> {
+    /// Builds the element.
+    #[must_use]
+    pub fn build(self) -> VListElem {
+        let opt = self.opt;
+        VListElem {
+            elem: self.elem,
+            shift: opt.shift,
+            margin_left: opt.margin_left,
+            margin_right: opt.margin_right,
+            wrapper_classes: opt.wrapper_classes,
+            wrapper_style: opt.wrapper_style,
+        }
+    }
 }
 
 /// Kern element for vertical list
@@ -159,31 +224,77 @@ pub struct VListElemAndShift {
     pub wrapper_style: Option<CssStyle>,
 }
 
-#[bon]
+/// Builder for [`VListElemAndShift`], returned by
+/// [`VListElemAndShift::builder`]. `elem` and `shift` are required.
+#[must_use]
+pub struct VListElemAndShiftBuilder<E = Unset, S = Unset> {
+    elem: E,
+    shift: S,
+    opt: VListElemAndShiftOptional,
+}
+
+#[derive(Default)]
+struct VListElemAndShiftOptional {
+    margin_left: Option<String>,
+    margin_right: Option<String>,
+    wrapper_classes: Option<ClassList>,
+    wrapper_style: Option<CssStyle>,
+}
+
 impl VListElemAndShift {
     /// Creates a new VListElemAndShift
-    #[builder]
-    pub const fn new(
-        /// Element for vertical list
-        elem: HtmlDomNode,
-        /// Shift amount
-        shift: f64,
-        /// Optional left margin
-        margin_left: Option<String>,
-        /// Optional right margin
-        margin_right: Option<String>,
-        /// Optional wrapper classes
-        wrapper_classes: Option<ClassList>,
-        /// Optional wrapper style
-        wrapper_style: Option<CssStyle>,
-    ) -> Self {
-        Self {
+    pub fn builder() -> VListElemAndShiftBuilder {
+        VListElemAndShiftBuilder {
+            elem: Unset,
+            shift: Unset,
+            opt: VListElemAndShiftOptional::default(),
+        }
+    }
+}
+
+impl<E, S> VListElemAndShiftBuilder<E, S> {
+    /// Element for vertical list
+    pub fn elem(self, elem: HtmlDomNode) -> VListElemAndShiftBuilder<HtmlDomNode, S> {
+        VListElemAndShiftBuilder {
             elem,
+            shift: self.shift,
+            opt: self.opt,
+        }
+    }
+
+    /// Shift amount
+    pub fn shift(self, shift: f64) -> VListElemAndShiftBuilder<E, f64> {
+        VListElemAndShiftBuilder {
+            elem: self.elem,
             shift,
-            margin_left,
-            margin_right,
-            wrapper_classes,
-            wrapper_style,
+            opt: self.opt,
+        }
+    }
+
+    optional_setters! {
+        /// Optional left margin
+        margin_left / maybe_margin_left: String;
+        /// Optional right margin
+        margin_right / maybe_margin_right: String;
+        /// Optional wrapper classes
+        wrapper_classes / maybe_wrapper_classes: ClassList;
+        /// Optional wrapper style
+        wrapper_style / maybe_wrapper_style: CssStyle;
+    }
+}
+
+impl VListElemAndShiftBuilder<HtmlDomNode, f64> {
+    /// Builds the element.
+    #[must_use]
+    pub fn build(self) -> VListElemAndShift {
+        let opt = self.opt;
+        VListElemAndShift {
+            elem: self.elem,
+            shift: self.shift,
+            margin_left: opt.margin_left,
+            margin_right: opt.margin_right,
+            wrapper_classes: opt.wrapper_classes,
+            wrapper_style: opt.wrapper_style,
         }
     }
 }
