@@ -1,5 +1,5 @@
-use strum::AsRefStr;
-use strum_macros::EnumString;
+use crate::types::VariantNotFound;
+use core::str::FromStr;
 
 /// Rendering mode for KaTeX mathematical expressions.
 ///
@@ -54,8 +54,7 @@ pub enum Mode {
 /// - [`CharInfo`](struct.CharInfo.html) for how fonts are associated with
 ///   symbols
 /// - KaTeX font documentation for glyph coverage details
-#[derive(Debug, PartialEq, Eq, EnumString, Clone)]
-#[strum(ascii_case_insensitive)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Font {
     /// The primary font family for standard mathematical symbols.
     ///
@@ -82,8 +81,22 @@ pub enum Font {
     /// glyphs.
     Ams,
     /// A custom or user-defined font family.
-    #[strum(default)]
     Custom(String),
+}
+impl FromStr for Font {
+    type Err = VariantNotFound;
+
+    /// Parses `main` or `ams` in any ASCII case; anything else is a custom
+    /// font of that name.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(if s.eq_ignore_ascii_case("main") {
+            Self::Main
+        } else if s.eq_ignore_ascii_case("ams") {
+            Self::Ams
+        } else {
+            Self::Custom(s.to_owned())
+        })
+    }
 }
 
 /// Atom types for symbols in mathematical expressions.
@@ -98,8 +111,7 @@ pub enum Font {
 ///
 /// - [`Group`](enum.Group.html) for grouping atoms and non-atoms
 /// - TeXbook Chapter 18 for detailed atom type specifications
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Atom {
     /// Binary operators that combine two operands.
     ///
@@ -158,6 +170,26 @@ pub enum Atom {
     ///
     /// In LaTeX: `a = b`, `x < y`, `p \neq q`
     Rel,
+}
+impl Atom {
+    /// Returns the string KaTeX uses for this value.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Bin => "bin",
+            Self::Close => "close",
+            Self::Inner => "inner",
+            Self::Open => "open",
+            Self::Punct => "punct",
+            Self::Rel => "rel",
+        }
+    }
+}
+
+impl AsRef<str> for Atom {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 /// Non-atom types for symbols in mathematical and text contexts.

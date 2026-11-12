@@ -6,7 +6,6 @@
 
 use crate::types::AttributeMap;
 use core::mem;
-use strum::IntoDiscriminant as _;
 
 use crate::ParseError;
 use crate::build_common::{FONT_MAP, make_span};

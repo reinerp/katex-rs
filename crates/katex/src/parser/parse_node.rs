@@ -11,7 +11,7 @@ use crate::symbols::Atom;
 use crate::types::{Mode, SourceLocation, Token, TokenText};
 
 use crate::types::AttributeMap;
-use strum::{AsRefStr, Display, EnumDiscriminants};
+use core::fmt;
 use thiserror::Error;
 
 /// Represents the different types of column separation used in array
@@ -97,7 +97,7 @@ pub enum AlignSpec {
 ///
 /// # Architecture
 ///
-/// The enum uses the `strum` crate for discriminant generation, allowing
+/// [`AnyParseNode::discriminant`] returns the node's [`NodeType`], allowing
 /// runtime type checking and serialization. The [`NodeType`] discriminant
 /// provides a way to identify node types without pattern matching.
 ///
@@ -112,11 +112,7 @@ pub enum AlignSpec {
 /// * [`NodeType`] - The discriminant type for runtime type checking
 /// * [`assert_node_type`] - Type assertion utility
 /// * [`ParseNode`] - Type alias for this enum
-#[derive(Debug, Clone, PartialEq, EnumDiscriminants)]
-#[strum_discriminants(vis(pub))]
-#[strum_discriminants(doc = "Discriminant type for runtime type checking of parse nodes")]
-#[strum_discriminants(derive(Display, Hash, AsRefStr), strum(serialize_all = "lowercase"))]
-#[strum_discriminants(name(NodeType))]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AnyParseNode {
     /// ## Structural Nodes
     /// Array/matrix environments with rows and columns
@@ -129,7 +125,6 @@ pub enum AnyParseNode {
     Genfrac(Box<ParseNodeGenfrac>),
     /// Left-right delimiter pairs
     LeftRight(ParseNodeLeftRight),
-    #[strum_discriminants(strum(serialize = "leftright-right"))]
     /// Right delimiters in left-right delimiter pairs (\left...\right).
     LeftRightRight(ParseNodeLeftRightRight),
     /// Square roots and nth roots
@@ -177,7 +172,6 @@ pub enum AnyParseNode {
     CdLabel(ParseNodeCdLabel),
     /// Parent containers for CD labels in commutative diagrams.
     CdLabelParent(ParseNodeCdLabelParent),
-    #[strum_discriminants(strum(serialize = "color-token"))]
     /// Color tokens for setting current color context (\color{name}).
     ColorToken(ParseNodeColorToken),
     /// Raw content passed through without mathematical processing.
@@ -194,13 +188,10 @@ pub enum AnyParseNode {
     Verb(ParseNodeVerb),
     /// Ordinary text symbols in math mode (letters, punctuation).
     TextOrd(ParseNodeTextOrd),
-    #[strum_discriminants(strum(serialize = "accent-token"))]
     /// Accent symbols for diacritical marks (\hat, \bar, \tilde, etc.).
     AccentToken(ParseNodeAccentToken),
-    #[strum_discriminants(strum(serialize = "op-token"))]
     /// Operator symbols with special positioning (\sum, \int, \lim, etc.).
     OpToken(ParseNodeOpToken),
-    #[strum_discriminants(strum(serialize = "accentUnder"))]
     /// Accent marks placed below expressions (\underline, \underbar, etc.).
     AccentUnder(Box<ParseNodeAccentUnder>),
     /// Carriage returns and line breaks (\\, \newline).
@@ -251,9 +242,291 @@ pub enum AnyParseNode {
     Smash(ParseNodeSmash),
     /// Vertically centered content (\vcenter{...}).
     Vcenter(ParseNodeVcenter),
-    #[strum_discriminants(strum(serialize = "x-arrow"))]
     /// Extensible arrows with labels (\xleftarrow{...}, \xrightarrow{...}).
     XArrow(ParseNodeXArrow),
+}
+/// Discriminant type for runtime type checking of parse nodes
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NodeType {
+    /// Array/matrix environments with rows and columns
+    Array,
+    /// Ordered groups of expressions (parentheses, etc.)
+    OrdGroup,
+    /// Superscript/subscript combinations
+    SupSub,
+    /// Generalized fractions (fractions, binomials)
+    Genfrac,
+    /// Left-right delimiter pairs
+    LeftRight,
+    /// Right delimiters in left-right delimiter pairs (\left...\right).
+    LeftRightRight,
+    /// Square roots and nth roots
+    Sqrt,
+    /// Atomic symbols with specific mathematical meaning
+    Atom,
+    /// Ordinary mathematical symbols
+    MathOrd,
+    /// Mathematical operators
+    Op,
+    /// Explicit spacing elements
+    Spacing,
+    /// Text content within math
+    Text,
+    /// Style changes (bold, italic, etc.)
+    Styling,
+    /// Font family changes
+    Font,
+    /// Color specifications
+    Color,
+    /// Accents over symbols (hats, bars, etc.)
+    Accent,
+    /// Horizontal lines on top of expressions
+    Overline,
+    /// Horizontal lines below expressions
+    Underline,
+    /// Invisible content for spacing or alignment
+    Phantom,
+    /// Horizontal phantom content for spacing (\hphantom{...}).
+    Hphantom,
+    /// Vertical phantom content for spacing (\vphantom{...}).
+    Vphantom,
+    /// Horizontal/vertical rules
+    Rule,
+    /// Labels for arrows in commutative diagram environments
+    /// (\begin{CD}...\end{CD}).
+    CdLabel,
+    /// Parent containers for CD labels in commutative diagrams.
+    CdLabelParent,
+    /// Color tokens for setting current color context (\color{name}).
+    ColorToken,
+    /// Raw content passed through without mathematical processing.
+    Raw,
+    /// Size specifications for spacing and dimensions (\rule, spacing
+    /// commands).
+    Size,
+    /// Tagged equations with labels (\tag{label} or automatic numbering).
+    Tag,
+    /// Hyperlinks in mathematical expressions (\url{...}).
+    Url,
+    /// Verbatim text preserving exact formatting (\verb|text| or
+    /// \begin{verbatim}...\end{verbatim}).
+    Verb,
+    /// Ordinary text symbols in math mode (letters, punctuation).
+    TextOrd,
+    /// Accent symbols for diacritical marks (\hat, \bar, \tilde, etc.).
+    AccentToken,
+    /// Operator symbols with special positioning (\sum, \int, \lim, etc.).
+    OpToken,
+    /// Accent marks placed below expressions (\underline, \underbar, etc.).
+    AccentUnder,
+    /// Carriage returns and line breaks (\\, \newline).
+    Cr,
+    /// Delimiter sizing for proper enclosure (\big, \Big, \bigg, etc.).
+    Delimsizing,
+    /// Enclosed expressions with styling (\boxed, \colorbox, etc.).
+    Enclose,
+    /// Custom mathematical environments (\begin{env}...\end{env}).
+    Environment,
+    /// Horizontal boxes for grouping content (\hbox{...}).
+    Hbox,
+    /// Horizontal braces above/below expressions (\overbrace, \underbrace).
+    HorizBrace,
+    /// Hyperlinks with custom text (\href{url}{text}).
+    Href,
+    /// Embedded HTML content within math expressions.
+    Html,
+    /// Content renderable in both HTML and MathML formats.
+    HtmlMathMl,
+    /// Included graphics/images (\includegraphics{...}).
+    Includegraphics,
+    /// Custom infix operators between operands.
+    Infix,
+    /// Internal parser nodes for implementation details.
+    Internal,
+    /// Explicit kerning/spacing adjustments (\kern, \mkern).
+    Kern,
+    /// Overlapping content for annotations (\rlap, \llap, \clap).
+    Lap,
+    /// Different renderings for display/text/script modes
+    /// (\mathchoice{...}{...}{...}{...}).
+    MathChoice,
+    /// Middle delimiters in expressions (\middle|).
+    Middle,
+    /// Math class specifications for spacing and rendering (mord, mbin, mrel,
+    /// etc.).
+    Mclass,
+    /// Operator names with special formatting (\operatorname{...}).
+    OperatorName,
+    /// Poor man's bold text formatting (\pmb{...}).
+    Pmb,
+    /// Raised or lowered content (\raisebox{...}{...}).
+    Raisebox,
+    /// Size changes for expressions (\scriptsize, \large, etc.).
+    Sizing,
+    /// Smashed content ignoring height/depth (\smash{...}).
+    Smash,
+    /// Vertically centered content (\vcenter{...}).
+    Vcenter,
+    /// Extensible arrows with labels (\xleftarrow{...}, \xrightarrow{...}).
+    XArrow,
+}
+
+impl NodeType {
+    /// Returns the node type's name, as KaTeX spells it.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Array => "array",
+            Self::OrdGroup => "ordgroup",
+            Self::SupSub => "supsub",
+            Self::Genfrac => "genfrac",
+            Self::LeftRight => "leftright",
+            Self::LeftRightRight => "leftright-right",
+            Self::Sqrt => "sqrt",
+            Self::Atom => "atom",
+            Self::MathOrd => "mathord",
+            Self::Op => "op",
+            Self::Spacing => "spacing",
+            Self::Text => "text",
+            Self::Styling => "styling",
+            Self::Font => "font",
+            Self::Color => "color",
+            Self::Accent => "accent",
+            Self::Overline => "overline",
+            Self::Underline => "underline",
+            Self::Phantom => "phantom",
+            Self::Hphantom => "hphantom",
+            Self::Vphantom => "vphantom",
+            Self::Rule => "rule",
+            Self::CdLabel => "cdlabel",
+            Self::CdLabelParent => "cdlabelparent",
+            Self::ColorToken => "color-token",
+            Self::Raw => "raw",
+            Self::Size => "size",
+            Self::Tag => "tag",
+            Self::Url => "url",
+            Self::Verb => "verb",
+            Self::TextOrd => "textord",
+            Self::AccentToken => "accent-token",
+            Self::OpToken => "op-token",
+            Self::AccentUnder => "accentUnder",
+            Self::Cr => "cr",
+            Self::Delimsizing => "delimsizing",
+            Self::Enclose => "enclose",
+            Self::Environment => "environment",
+            Self::Hbox => "hbox",
+            Self::HorizBrace => "horizbrace",
+            Self::Href => "href",
+            Self::Html => "html",
+            Self::HtmlMathMl => "htmlmathml",
+            Self::Includegraphics => "includegraphics",
+            Self::Infix => "infix",
+            Self::Internal => "internal",
+            Self::Kern => "kern",
+            Self::Lap => "lap",
+            Self::MathChoice => "mathchoice",
+            Self::Middle => "middle",
+            Self::Mclass => "mclass",
+            Self::OperatorName => "operatorname",
+            Self::Pmb => "pmb",
+            Self::Raisebox => "raisebox",
+            Self::Sizing => "sizing",
+            Self::Smash => "smash",
+            Self::Vcenter => "vcenter",
+            Self::XArrow => "x-arrow",
+        }
+    }
+}
+
+impl AsRef<str> for NodeType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for NodeType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad(self.as_str())
+    }
+}
+
+impl AnyParseNode {
+    /// Returns the node's type.
+    #[must_use]
+    pub const fn discriminant(&self) -> NodeType {
+        match self {
+            Self::Array(_) => NodeType::Array,
+            Self::OrdGroup(_) => NodeType::OrdGroup,
+            Self::SupSub(_) => NodeType::SupSub,
+            Self::Genfrac(_) => NodeType::Genfrac,
+            Self::LeftRight(_) => NodeType::LeftRight,
+            Self::LeftRightRight(_) => NodeType::LeftRightRight,
+            Self::Sqrt(_) => NodeType::Sqrt,
+            Self::Atom(_) => NodeType::Atom,
+            Self::MathOrd(_) => NodeType::MathOrd,
+            Self::Op(_) => NodeType::Op,
+            Self::Spacing(_) => NodeType::Spacing,
+            Self::Text(_) => NodeType::Text,
+            Self::Styling(_) => NodeType::Styling,
+            Self::Font(_) => NodeType::Font,
+            Self::Color(_) => NodeType::Color,
+            Self::Accent(_) => NodeType::Accent,
+            Self::Overline(_) => NodeType::Overline,
+            Self::Underline(_) => NodeType::Underline,
+            Self::Phantom(_) => NodeType::Phantom,
+            Self::Hphantom(_) => NodeType::Hphantom,
+            Self::Vphantom(_) => NodeType::Vphantom,
+            Self::Rule(_) => NodeType::Rule,
+            Self::CdLabel(_) => NodeType::CdLabel,
+            Self::CdLabelParent(_) => NodeType::CdLabelParent,
+            Self::ColorToken(_) => NodeType::ColorToken,
+            Self::Raw(_) => NodeType::Raw,
+            Self::Size(_) => NodeType::Size,
+            Self::Tag(_) => NodeType::Tag,
+            Self::Url(_) => NodeType::Url,
+            Self::Verb(_) => NodeType::Verb,
+            Self::TextOrd(_) => NodeType::TextOrd,
+            Self::AccentToken(_) => NodeType::AccentToken,
+            Self::OpToken(_) => NodeType::OpToken,
+            Self::AccentUnder(_) => NodeType::AccentUnder,
+            Self::Cr(_) => NodeType::Cr,
+            Self::Delimsizing(_) => NodeType::Delimsizing,
+            Self::Enclose(_) => NodeType::Enclose,
+            Self::Environment(_) => NodeType::Environment,
+            Self::Hbox(_) => NodeType::Hbox,
+            Self::HorizBrace(_) => NodeType::HorizBrace,
+            Self::Href(_) => NodeType::Href,
+            Self::Html(_) => NodeType::Html,
+            Self::HtmlMathMl(_) => NodeType::HtmlMathMl,
+            Self::Includegraphics(_) => NodeType::Includegraphics,
+            Self::Infix(_) => NodeType::Infix,
+            Self::Internal(_) => NodeType::Internal,
+            Self::Kern(_) => NodeType::Kern,
+            Self::Lap(_) => NodeType::Lap,
+            Self::MathChoice(_) => NodeType::MathChoice,
+            Self::Middle(_) => NodeType::Middle,
+            Self::Mclass(_) => NodeType::Mclass,
+            Self::OperatorName(_) => NodeType::OperatorName,
+            Self::Pmb(_) => NodeType::Pmb,
+            Self::Raisebox(_) => NodeType::Raisebox,
+            Self::Sizing(_) => NodeType::Sizing,
+            Self::Smash(_) => NodeType::Smash,
+            Self::Vcenter(_) => NodeType::Vcenter,
+            Self::XArrow(_) => NodeType::XArrow,
+        }
+    }
+}
+
+impl From<&AnyParseNode> for NodeType {
+    fn from(node: &AnyParseNode) -> Self {
+        node.discriminant()
+    }
+}
+
+impl From<AnyParseNode> for NodeType {
+    fn from(node: AnyParseNode) -> Self {
+        node.discriminant()
+    }
 }
 
 impl AnyParseNode {

@@ -9,14 +9,14 @@ use crate::options::Options;
 use crate::parser::parse_node::AnyParseNode;
 use crate::spacing_data::{SPACINGS, TIGHT_SPACINGS};
 use crate::types::ClassList;
+use crate::types::VariantNotFound;
 use crate::types::{CssProperty, ParseError, ParseErrorKind};
 use crate::units::make_em;
 use crate::{KatexContext, build_common};
 use alloc::borrow::Cow;
 use core::mem;
-use core::str::FromStr as _;
+use core::str::FromStr;
 use phf::phf_set;
-use strum::{EnumString, IntoDiscriminant as _};
 
 // Binary atoms (first class `mbin`) change into ordinary atoms (`mord`)
 // depending on their surroundings. See TeXbook pg. 442-446, Rules 5 and 6,
@@ -26,8 +26,7 @@ const BIN_LEFT_CANCELLER: phf::Set<&str> =
 const BIN_RIGHT_CANCELLER: phf::Set<&str> = phf_set!("rightmost", "mrel", "mclose", "mpunct");
 
 /// DOM enum for atom classes
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DomType {
     /// Ordinary atom (mord) - default class for most symbols
     Mord,
@@ -45,6 +44,23 @@ pub enum DomType {
     Mpunct,
     /// Inner atom (minner) - for inner expressions
     Minner,
+}
+impl FromStr for DomType {
+    type Err = VariantNotFound;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mord" => Ok(Self::Mord),
+            "mop" => Ok(Self::Mop),
+            "mbin" => Ok(Self::Mbin),
+            "mrel" => Ok(Self::Mrel),
+            "mopen" => Ok(Self::Mopen),
+            "mclose" => Ok(Self::Mclose),
+            "mpunct" => Ok(Self::Mpunct),
+            "minner" => Ok(Self::Minner),
+            _ => Err(VariantNotFound),
+        }
+    }
 }
 
 /// Enum for is_real_group parameter, matching JavaScript's boolean | "root"

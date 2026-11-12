@@ -10,16 +10,11 @@ use crate::define_function::FunctionSpec;
 use crate::parser::parse_node::NodeType;
 use crate::utils::escape_into;
 pub use source_location::{LexerInterface, SourceLocation};
-use strum::AsRefStr;
-use strum::Display;
-use strum::EnumCount;
-use strum::EnumIter;
-use strum::EnumString;
 
 /// Parse error type - imported from parse_error module
 mod parse_error;
-pub use parse_error::{ErrorLocationProvider, ParseError, ParseErrorKind};
-use strum::FromRepr;
+use core::str::FromStr;
+pub use parse_error::{ErrorLocationProvider, ParseError, ParseErrorKind, VariantNotFound};
 
 mod tokens;
 pub use crate::symbols::Mode;
@@ -39,26 +34,11 @@ pub use source_location::SourceRangeRef;
 
 /// Represents a set of standard CSS property names.
 ///
-/// This enum is serialized in `kebab-case` (the standard CSS syntax) via
-/// `strum`. It can be used for mapping strongly-typed property names to their
+/// This enum is serialized in `kebab-case` (the standard CSS syntax) by
+/// [`CssProperty::as_str`]. It can be used for mapping strongly-typed property names to their
 /// CSS strings and is especially useful when generating styles
 /// programmatically.
-#[derive(
-    EnumIter,
-    Debug,
-    Copy,
-    AsRefStr,
-    PartialEq,
-    Eq,
-    Hash,
-    Clone,
-    Display,
-    EnumCount,
-    FromRepr,
-    Ord,
-    PartialOrd,
-)]
-#[strum(serialize_all = "kebab-case")]
+#[derive(Debug, Copy, PartialEq, Eq, Hash, Clone, Ord, PartialOrd)]
 #[repr(u8)]
 pub enum CssProperty {
     /// Sets the background color of an element. See: <https://developer.mozilla.org/docs/Web/CSS/background-color>
@@ -107,6 +87,49 @@ pub enum CssProperty {
     Width,
     /// Sets the vertical alignment of an inline or table-cell element. See: <https://developer.mozilla.org/docs/Web/CSS/vertical-align>
     VerticalAlign,
+}
+impl CssProperty {
+    /// Returns the CSS property name.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::BackgroundColor => "background-color",
+            Self::BorderBottomWidth => "border-bottom-width",
+            Self::BorderColor => "border-color",
+            Self::BorderRightStyle => "border-right-style",
+            Self::BorderRightWidth => "border-right-width",
+            Self::BorderTopWidth => "border-top-width",
+            Self::BorderStyle => "border-style",
+            Self::BorderWidth => "border-width",
+            Self::Bottom => "bottom",
+            Self::Color => "color",
+            Self::Height => "height",
+            Self::Left => "left",
+            Self::Margin => "margin",
+            Self::MarginLeft => "margin-left",
+            Self::MarginRight => "margin-right",
+            Self::MarginTop => "margin-top",
+            Self::MinWidth => "min-width",
+            Self::PaddingLeft => "padding-left",
+            Self::Position => "position",
+            Self::TextShadow => "text-shadow",
+            Self::Top => "top",
+            Self::Width => "width",
+            Self::VerticalAlign => "vertical-align",
+        }
+    }
+}
+
+impl AsRef<str> for CssProperty {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for CssProperty {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.pad(self.as_str())
+    }
 }
 
 /// A compact map of CSS properties for HTML nodes.
@@ -288,8 +311,7 @@ pub enum ArgType {
 }
 
 /// Enumeration of style variants
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StyleVariant {
     /// Text style for inline mathematical expressions.
     ///
@@ -312,6 +334,24 @@ pub enum StyleVariant {
     /// Corresponds to LaTeX's `\scriptscriptstyle`.
     ScriptScript,
 }
+impl StyleVariant {
+    /// Returns the string KaTeX uses for this value.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Display => "display",
+            Self::Script => "script",
+            Self::ScriptScript => "scriptscript",
+        }
+    }
+}
+
+impl AsRef<str> for StyleVariant {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
 
 /// Enumeration of token types that can break or terminate parsing in KaTeX.
 ///
@@ -330,32 +370,64 @@ pub enum StyleVariant {
 /// - See [`Token`] for general token representation.
 /// - Used in `ParseError` for error location reporting.
 /// - Related to parsing of groups and commands in the lexer.
-#[derive(Debug, Clone, PartialEq, Eq, EnumString, AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BreakToken {
     /// Right bracket token `]` - terminates bracket groups.
-    #[strum(serialize = "]")]
     RightBracket,
     /// Right brace token `}` - terminates brace groups.
-    #[strum(serialize = "}")]
     RightBrace,
     /// End group command `\endgroup` - terminates LaTeX groups.
-    #[strum(serialize = "\\endgroup")]
     EndGroup,
     /// Dollar sign `$` - terminates inline math mode.
-    #[strum(serialize = "$")]
     Dollar,
     /// Right parenthesis `\)` - terminates display math mode.
-    #[strum(serialize = "\\)")]
     RightParen,
     /// Double backslash `\\` - terminates table rows.
-    #[strum(serialize = "\\\\")]
     DoubleBackslash,
     /// End command `\end` - terminates environments.
-    #[strum(serialize = "\\end")]
     End,
     /// End of file marker - terminates input stream.
-    #[strum(serialize = "EOF")]
     Eof,
+}
+impl BreakToken {
+    /// Returns the token text.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::RightBracket => "]",
+            Self::RightBrace => "}",
+            Self::EndGroup => "\\endgroup",
+            Self::Dollar => "$",
+            Self::RightParen => "\\)",
+            Self::DoubleBackslash => "\\\\",
+            Self::End => "\\end",
+            Self::Eof => "EOF",
+        }
+    }
+}
+
+impl AsRef<str> for BreakToken {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl FromStr for BreakToken {
+    type Err = VariantNotFound;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "]" => Ok(Self::RightBracket),
+            "}" => Ok(Self::RightBrace),
+            "\\endgroup" => Ok(Self::EndGroup),
+            "$" => Ok(Self::Dollar),
+            "\\)" => Ok(Self::RightParen),
+            "\\\\" => Ok(Self::DoubleBackslash),
+            "\\end" => Ok(Self::End),
+            "EOF" => Ok(Self::Eof),
+            _ => Err(VariantNotFound),
+        }
+    }
 }
 
 /// Enumeration of font variants used in mathematical expression rendering.

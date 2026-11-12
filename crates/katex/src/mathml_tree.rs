@@ -16,7 +16,6 @@ use crate::utils::escape_into;
 #[cfg(feature = "wasm")]
 use crate::web_context::WebContext;
 use core::fmt::{self, Debug, Write as _};
-use strum::AsRefStr;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::JsCast as _;
 #[cfg(feature = "wasm")]
@@ -46,8 +45,7 @@ fn create_element(ctx: &WebContext, name: &str) -> web_sys::Element {
 }
 
 /// MathML node types used in KaTeX
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsRefStr)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MathNodeType {
     /// `<math>` element
     Math,
@@ -103,6 +101,47 @@ pub enum MathNodeType {
     Mphantom,
     /// `<mglyph>` element
     Mglyph,
+}
+impl MathNodeType {
+    /// Returns the element name.
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Math => "math",
+            Self::Annotation => "annotation",
+            Self::Semantics => "semantics",
+            Self::Mtext => "mtext",
+            Self::Mn => "mn",
+            Self::Mo => "mo",
+            Self::Mi => "mi",
+            Self::Mspace => "mspace",
+            Self::Mover => "mover",
+            Self::Munder => "munder",
+            Self::Munderover => "munderover",
+            Self::Msup => "msup",
+            Self::Msub => "msub",
+            Self::Msubsup => "msubsup",
+            Self::Mfrac => "mfrac",
+            Self::Mroot => "mroot",
+            Self::Msqrt => "msqrt",
+            Self::Mtable => "mtable",
+            Self::Mtr => "mtr",
+            Self::Mtd => "mtd",
+            Self::Mlabeledtr => "mlabeledtr",
+            Self::Mrow => "mrow",
+            Self::Menclose => "menclose",
+            Self::Mstyle => "mstyle",
+            Self::Mpadded => "mpadded",
+            Self::Mphantom => "mphantom",
+            Self::Mglyph => "mglyph",
+        }
+    }
+}
+
+impl AsRef<str> for MathNodeType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 /// Get the appropriate space character based on width

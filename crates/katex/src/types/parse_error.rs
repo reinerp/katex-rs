@@ -13,6 +13,7 @@ use crate::symbols::Mode;
 use crate::types::SourceLocation;
 use alloc::boxed::Box;
 use alloc::string::String;
+use core::error::Error;
 use core::fmt;
 #[cfg(feature = "backtrace")]
 use std::backtrace::Backtrace;
@@ -86,8 +87,20 @@ impl ParseError {
     }
 }
 
-impl From<strum::ParseError> for ParseError {
-    fn from(err: strum::ParseError) -> Self {
+/// Error returned when parsing a string that names no variant of an enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VariantNotFound;
+
+impl fmt::Display for VariantNotFound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Matching variant not found")
+    }
+}
+
+impl Error for VariantNotFound {}
+
+impl From<VariantNotFound> for ParseError {
+    fn from(err: VariantNotFound) -> Self {
         Self::new(ParseErrorKind::EnumParse(err))
     }
 }
@@ -392,7 +405,7 @@ pub enum ParseErrorKind {
     #[error("newline node should be the last pushed element")]
     NewlineNodeNotFound,
     #[error("Enum parse error: {0}")]
-    EnumParse(strum::ParseError),
+    EnumParse(VariantNotFound),
     #[error(transparent)]
     ParseNode(#[from] ParseNodeError),
 }

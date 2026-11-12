@@ -7,6 +7,7 @@
 
 use crate::builder::{Unset, optional_setters};
 use crate::style::TEXT;
+use crate::types::VariantNotFound;
 use crate::types::{BUILD_LEVELS_PER_NESTING_LEVEL, ParseError, ParseErrorKind};
 use crate::{
     font_metrics::{FONT_METRICS, FontMetrics},
@@ -15,8 +16,8 @@ use crate::{
 use alloc::borrow::Cow;
 use core::cmp;
 use core::ptr;
+use core::str::FromStr;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use strum::EnumString;
 
 /// Bounds the recursion of the HTML and MathML builders while they build one
 /// tree: at most [`BUILD_LEVELS_PER_NESTING_LEVEL`] times
@@ -95,16 +96,26 @@ impl Drop for BuildDepthGuard<'_> {
 }
 
 /// Font weight options
-#[derive(Debug, Clone, PartialEq, Eq, EnumString)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FontWeight {
     /// Bold font weight
     TextBf, // "textbf"
     /// Medium font weight
     TextMd, // "textmd"
     /// Means no change
-    #[strum(serialize = "")]
     Empty, // ""
+}
+impl FromStr for FontWeight {
+    type Err = VariantNotFound;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "textbf" => Ok(Self::TextBf),
+            "textmd" => Ok(Self::TextMd),
+            "" => Ok(Self::Empty),
+            _ => Err(VariantNotFound),
+        }
+    }
 }
 
 impl FontWeight {
