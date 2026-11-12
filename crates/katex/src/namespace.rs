@@ -7,14 +7,14 @@
 
 use core::cell::RefMut;
 
-use rapidhash::{RapidHashMap, RapidHashSet};
+use std::collections::{HashMap, HashSet};
 
 use crate::types::{ParseError, ParseErrorKind};
 
 /// Make it easier to switch between different hash backends.
-pub type KeyMap<K, V> = RapidHashMap<K, V>;
+pub type KeyMap<K, V> = HashMap<K, V>;
 /// Alias for the default hash set.
-pub type KeySet<K> = RapidHashSet<K>;
+pub type KeySet<K> = HashSet<K>;
 /// Mapping type alias
 pub type Mapping<V> = KeyMap<String, V>;
 

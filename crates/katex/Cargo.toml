@@ -31,7 +31,6 @@ phf = { version = "0.14.0", features = ["macros"] }
 strum_macros = "0.28.0"
 strum = { version = "0.28.0", features = ["derive"] }
 bon = "3.10.0"
-rapidhash = "4.5.1"
 
 # WebAssembly support
 wasm-bindgen = { version = "0.2.128", optional = true }
