@@ -47,8 +47,15 @@ pub mod levels {
     /// are then placed by the sum of unrounded advances and not by sums of layout units that
     /// are rounded per element, so one in a few hundred glyphs lands a pixel away.
     pub const UNWRAP_TEXT: u32 = 1 << 11;
+    /// A vertical list of one item is one element, not two.
+    pub const MERGE_ITEM: u32 = 1 << 12;
+    /// A size span that holds one run of text takes the run's classes.
+    pub const MERGE_CONTENT: u32 = 1 << 13;
+    /// Frequent groups of declarations of a vertical list (its size, and its item's place) have
+    /// one class each.
+    pub const COMBO: u32 = 1 << 14;
     /// Every step.
-    pub const ALL: u32 = (1 << 12) - 1;
+    pub const ALL: u32 = (1 << 15) - 1;
     /// Every step that keeps the pixels exactly as KaTeX's.
     pub const EXACT: u32 = ALL & !(UNWRAP_TEXT | TEXT);
 }
@@ -328,7 +335,7 @@ fn takes_margin(el: &El) -> bool {
         && el.classes.iter().all(|c| {
             DEAD.contains(&c.as_str())
                 || FONT.contains(&c.as_str())
-                || matches!(c.as_str(), "msupsub" | "X")
+                || matches!(c.as_str(), "msupsub" | "X" | "Y")
         })
 }
 
@@ -389,6 +396,7 @@ fn walk(el: &mut El, role: Role, levels: u32) {
             walk(child, kid_role, levels);
         }
     }
+    let plain = kid_role == Role::Normal && plain_parent(el);
     if kid_role == Role::Wrapper && levels & levels::PSEUDO != 0 && el.has("X") {
         for kid in &mut el.kids {
             if let Node::El(wrapper) = kid {
@@ -399,7 +407,16 @@ fn walk(el: &mut El, role: Role, levels: u32) {
     if levels & levels::PSEUDO != 0 && el.has("katex-base") {
         strut_to_pseudo(el);
     }
-    let plain = kid_role == Role::Normal && plain_parent(el);
+    if levels & levels::MERGE_ITEM != 0 && el.has("X") {
+        merge_item(el);
+    }
+    if levels & levels::MERGE_CONTENT != 0 && (role == Role::Wrapper || el.has("Y")) {
+        for kid in &mut el.kids {
+            if let Node::El(content) = kid {
+                merge_content(content);
+            }
+        }
+    }
     if plain && levels & levels::UNWRAP != 0 {
         let kids = core::mem::take(&mut el.kids);
         for kid in kids {
@@ -422,7 +439,7 @@ fn walk(el: &mut El, role: Role, levels: u32) {
                 if child.has("msupsub")
                     && child.style.is_empty()
                     && child.kids.len() == 1
-                    && matches!(&child.kids[0], Node::El(c) if c.has("X"))
+                    && matches!(&child.kids[0], Node::El(c) if c.has("X") || c.has("Y"))
                 {
                     let Some(Node::El(mut inner)) = child.kids.pop() else { continue };
                     inner.classes.push("msupsub".to_owned());
@@ -439,6 +456,69 @@ fn walk(el: &mut El, role: Role, levels: u32) {
         merge_text(&mut el.kids);
     }
     merge_adjacent_text(&mut el.kids);
+}
+
+/// A vertical list of one item: the `X` and the wrapper of its item become one element `Y`. The
+/// wrapper is a zero-height block at the start of the `X`'s content, shifted by `top`, whose
+/// margins set the item's place in the line. As the `X` itself, shifted by `top` and with those
+/// margins, the item is drawn at the same place and takes the same room; the `X` gets an
+/// explicit `height` since its content is no longer a zero-height block.
+fn merge_item(x: &mut El) {
+    let [Node::El(wrapper)] = x.kids.as_mut_slice() else { return };
+    if !(wrapper.tag == Tag::Span
+        && wrapper.attrs.is_empty()
+        && wrapper.classes.len() == 2
+        && wrapper.classes[0] == "W"
+        && wrapper.classes[1].starts_with('k')
+        && wrapper.style.iter().all(|(p, _)| matches!(*p, "top" | "margin-left" | "margin-right"))
+        && x.attrs.is_empty()
+        && x.style.iter().all(|(p, _)| matches!(*p, "padding-top" | "height" | "vertical-align")))
+    {
+        return;
+    }
+    let mut wrapper = core::mem::replace(
+        wrapper,
+        El { tag: Tag::Span, classes: Vec::new(), style: Vec::new(), attrs: Vec::new(), kids: Vec::new() },
+    );
+    if x.get_style("height").is_none() {
+        x.style.push(("height", "0".to_owned()));
+    }
+    x.classes.retain(|c| c != "X");
+    x.classes.insert(0, "Y".to_owned());
+    // The wrapper's `W` is `Y` itself: `Y::before` is the pstrut.
+    x.classes.extend(wrapper.classes.drain(1..));
+    x.style.append(&mut wrapper.style);
+    x.kids = wrapper.kids;
+}
+
+/// A size span (an inline block in a vertical list) that holds one span of text, `<F63><N>i</N>`,
+/// is that span with the size: the span's font only changes the glyphs, and the size span is
+/// positioned by its baseline.
+fn merge_content(content: &mut El) {
+    if !(content.tag == Tag::Span
+        && content.style.is_empty()
+        && content.attrs.is_empty()
+        && !content.classes.is_empty()
+        && content.classes.iter().all(|c| is_size_class(c) || DEAD.contains(&c.as_str())))
+    {
+        return;
+    }
+    let [Node::El(inner)] = content.kids.as_mut_slice() else { return };
+    if !(inner.tag == Tag::Span
+        && text_only(inner)
+        && inner.attrs.is_empty()
+        && inner.classes.iter().all(|c| FONT.contains(&c.as_str()) || DEAD.contains(&c.as_str()))
+        && inner.style.iter().all(|(p, _)| *p == "margin-right"))
+    {
+        return;
+    }
+    let inner = core::mem::replace(
+        inner,
+        El { tag: Tag::Span, classes: Vec::new(), style: Vec::new(), attrs: Vec::new(), kids: Vec::new() },
+    );
+    content.classes.extend(inner.classes);
+    content.style = inner.style;
+    content.kids = inner.kids;
 }
 
 fn merge_adjacent_text(kids: &mut Vec<Node>) {
@@ -741,8 +821,6 @@ fn sizing_class(classes: &[String]) -> Option<String> {
             reset = n.parse::<u32>().ok().filter(|n| (1..=11).contains(n));
         } else if let Some(n) = c.strip_prefix("size") {
             size = n.parse::<u32>().ok().filter(|n| (1..=11).contains(n));
-        } else if !DEAD.contains(&c.as_str()) {
-            return None;
         }
     }
     let (true, Some(r), Some(s)) = (sizing, reset, size) else { return None };
@@ -754,28 +832,39 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
     out.push('<');
     out.push_str(el.tag.name());
     let mut classes: Vec<String> = Vec::new();
-    if levels & levels::SHORT_NAMES != 0 {
-        if let Some(c) = sizing_class(&el.classes) {
-            classes.push(c);
-        }
+    let sizing = if levels & levels::SHORT_NAMES != 0 { sizing_class(&el.classes) } else { None };
+    if let Some(c) = &sizing {
+        classes.push(c.clone());
     }
-    if classes.is_empty() {
-        for c in &el.classes {
-            if levels & levels::DEAD_CLASSES != 0 && DEAD.contains(&c.as_str()) {
+    for c in &el.classes {
+        if sizing.is_some() && is_size_class(c) {
+            continue;
+        }
+        if levels & levels::DEAD_CLASSES != 0 && DEAD.contains(&c.as_str()) {
+            continue;
+        }
+        if levels & levels::SHORT_NAMES != 0 {
+            if let Some(s) = short(c) {
+                classes.push(s.to_owned());
                 continue;
             }
-            if levels & levels::SHORT_NAMES != 0 {
-                if let Some(s) = short(c) {
-                    classes.push(s.to_owned());
-                    continue;
-                }
+        }
+        classes.push(c.clone());
+    }
+    let mut decls: Vec<(&str, String)> = el
+        .style
+        .iter()
+        .map(|(p, v)| (*p, if levels & levels::NUM_TRIM != 0 { trim_number(v) } else { v.clone() }))
+        .collect();
+    if levels & levels::COMBO != 0 {
+        for (group, table, prefix) in [(GEOM_PROPS, GEOMS, 'g'), (ITEM_PROPS, ITEMS, 'i')] {
+            if let Some(class) = combo_class(&mut decls, group, table, prefix) {
+                classes.push(class);
             }
-            classes.push(c.clone());
         }
     }
     let mut inline: Vec<(&str, String)> = Vec::new();
-    for (prop, value) in &el.style {
-        let value = if levels & levels::NUM_TRIM != 0 { trim_number(value) } else { value.clone() };
+    for (prop, value) in decls {
         if levels & levels::VALUE_CLASSES != 0 {
             if let Some(c) = value_class(prop, &value) {
                 classes.push(c);
@@ -862,59 +951,50 @@ const VALUES: &[(&str, &[&str])] = &[
     (
         "height",
         &[
-            ".011em", ".143em", ".15em", ".2025em", ".2083em", ".2441em", ".2501em", ".2645em",
-            ".2819em", ".2861em", ".2918em", ".3473em", ".3552em", ".4306em", ".4445em",
-            ".522em", ".5344em", ".5806em", ".59em", ".5945em", ".6111em", ".625em", ".6389em",
-            ".6444em", ".6595em", ".6667em", ".6833em", ".686em", ".6944em", ".7167em",
-            ".7278em", ".7333em", ".7335em", ".7667em", ".7719em", ".7778em", ".7804em",
-            ".7858em", ".786em", ".7917em", ".8019em", ".8095em", ".8141em", ".8193em",
-            ".8333em", ".8389em", ".8413em", ".8444em", ".8491em", ".854em", ".8641em",
-            ".8694em", ".8778em", ".8804em", ".8889em", ".8974em", ".8991em", ".9028em",
-            ".938em", ".9385em", ".9501em", ".9694em", "1em", "1.0361em", "1.0413em",
-            "1.0858em", "1.1113em", "1.1413em", "1.25em", "1.2503em", "1.2581em", "1.2709em",
-            "1.2777em", "1.2844em", "1.3861em", "1.4138em", "1.516em", "1.5689em", "1.68em",
-            "1.7941em", "1.8941em", "2.0074em", "2.0463em", "2.3em", "2.4em", "2.5em",
-            "2.566em", "2.7em", "3em", "3.008em", "3.0344em", "3.05em", "3.5689em", "3.68em",
-            "3.7941em", "3.8941em", "5.6em",
+            ".15em", "0", ".2861em", ".143em", ".2083em", ".2819em", ".3473em", ".686em",
+            ".3552em", ".011em", ".522em", ".2441em", "1.25em", "1.5689em", ".2501em", ".59em",
+            ".2645em", ".5344em", "1.2777em", "1.2844em", "1.68em", "1.8941em", "5.6em",
+            ".2025em", ".2918em", ".8804em", ".8889em", "1.3861em", "1.4138em", "1.516em",
+            "1.7941em",
         ],
     ),
     (
         "vertical-align",
         &[
-            "-5.6em", "-4.55em", "-1.516em", "-1.4382em", "-1.4138em", "-1.3861em",
-            "-1.2844em", "-1.2777em", "-1.25em", "-1.1em", "-.95em", "-.8804em", "-.7693em",
-            "-.69em", "-.686em", "-.59em", "-.5344em", "-.4233em", "-.3552em", "-.3473em",
-            "-.2918em", "-.2861em", "-.2819em", "-.2645em", "-.2527em", "-.2501em", "-.25em",
-            "-.2441em", "-.2083em", "-.2025em", "-.1944em", "-.15em", "-.143em", "-.136em",
-            "-.0833em", "-.0391em", "-.011em",
+            "-.15em", "-.2861em", "-.2083em", "-.143em", "-.2819em", "-.3473em", "-.686em",
+            "-.3552em", "-.011em", "-.2441em", "-.2501em", "-1.2777em", "-1.25em", "-.59em",
+            "-.25em", "-5.6em", "-1.2844em", "-.5344em", "-1.4138em", "-1.3861em", "-.8804em",
+            "-.2918em", "-.2645em", "-.1944em", "-.0391em", "-4.55em", "-1.4382em", "-.7693em",
+            "-.69em", "-.4233em", "-.2527em", "-.0833em", "-1.516em", "-1.1em", "-.2025em",
+            "-.136em",
         ],
     ),
     (
         "top",
         &[
-            "-8.26em", "-6.76em", "-5.26em", "-3.9789em", "-3.7941em", "-3.76em", "-3.677em",
-            "-3.5689em", "-3.322em", "-3.23em", "-3.2041em", "-3.113em", "-3.09em", "-3.063em",
-            "-3.05em", "-3.0344em", "-3em", "-2.989em", "-2.931em", "-2.786em", "-2.689em",
-            "-2.55em", "-2.5198em", "-2.4559em", "-2.453em", "-2.4355em", "-2.357em",
-            "-2.314em", "-2.2844em", "-2.26em", "-1.9em", "-1.8723em", "-1.8479em", "-1.809em",
-            "-.76em", "0", ".74em", "2.24em",
+            "-2.55em", "-3.063em", "-2.357em", "-3.113em", "0", "-3.05em", "-3.677em",
+            "-2.314em", "-3.23em", "-2.5198em", "-3.322em", "-2.689em", "-2.4559em", "-1.9em",
+            "-1.8723em", "-3em", "-2.989em", "-3.76em", "-3.2041em", "-2.26em", "-8.26em",
+            "-6.76em", "-5.26em", "-3.9789em", "-3.5689em", "-3.0344em", "-2.931em",
+            "-2.4355em", "-2.2844em", "-.76em", ".74em", "2.24em", "-3.7941em", "-3.09em",
+            "-2.786em", "-2.453em", "-1.8479em", "-1.809em",
         ],
     ),
     (
         "margin-left",
         &[
-            "-.2222em", "-.1389em", "-.109em", "-.1076em", "-.0785em", "-.0715em", "-.0576em",
-            "-.0502em", "-.044em", "-.0359em", "-.0315em", "-.0278em", "-.0269em", "-.0077em",
-            "-.0037em", "0", ".0556em", ".1667em", ".2222em", ".2778em", "2em",
+            "0", ".1667em", "-.0359em", ".2222em", "-.0077em", "-.1389em", "-.0576em",
+            "-.0278em", "-.0785em", ".2778em", "2em", "-.044em", "-.0715em", "-.0269em",
+            "-.109em", "-.1076em", "-.0315em", ".0556em", "-.2222em", "-.0502em", "-.0037em",
         ],
     ),
     (
         "margin-right",
         &[
-            "-.1667em", ".0037em", ".0077em", ".0139em", ".0197em", ".0269em", ".0278em",
-            ".0315em", ".0359em", ".044em", ".05em", ".0502em", ".0556em", ".0572em",
-            ".0576em", ".0714em", ".0715em", ".0785em", ".0813em", ".1076em", ".109em",
-            ".1389em", ".1667em", ".2222em", ".2778em", ".3333em", "1em", "2em",
+            ".2778em", ".05em", ".2222em", ".1667em", ".0359em", ".0278em", ".1389em",
+            ".0576em", ".0714em", ".0077em", ".0715em", ".0315em", ".0785em", ".044em",
+            ".0269em", ".109em", ".0572em", ".0139em", ".0556em", "1em", ".0502em", ".1076em",
+            "-.1667em", "2em", ".3333em", ".0813em", ".0037em", ".0197em",
         ],
     ),
     (
@@ -938,12 +1018,12 @@ const VALUES: &[(&str, &[&str])] = &[
     (
         "padding-top",
         &[
-            ".1514em", ".1645em", ".207em", ".2806em", ".3011em", ".3117em", ".3173em",
-            ".3175em", ".3281em", ".3283em", ".3361em", ".3448em", ".6828em", ".7144em",
-            ".7401em", ".7519em", ".8019em", ".8141em", ".8413em", ".8491em", ".8641em",
-            ".8913em", ".8991em", ".9191em", ".938em", "1.0064em", "1.0344em", "1.05em",
-            "1.09em", "1.1003em", "1.1081em", "1.2041em", "1.3214em", "1.3603em", "1.7844em",
-            "6.1em",
+            ".3011em", ".1514em", ".3117em", ".8141em", ".3283em", ".3173em", ".3361em",
+            "1.05em", ".8641em", ".3448em", ".8913em", ".2806em", "1.3214em", ".1645em",
+            ".3281em", ".207em", "1.1003em", ".7401em", ".7519em", "1.2041em", ".8019em",
+            ".8413em", ".8991em", ".3175em", ".8491em", ".938em", "1.0344em", "1.1081em",
+            "1.3603em", "1.7844em", "6.1em", ".6828em", ".7144em", ".9191em", "1.0064em",
+            "1.09em",
         ],
     ),
 ];
@@ -1031,22 +1111,203 @@ const PSTRUTS: &[(&str, &str)] = &[
 ];
 // PSTRUTS-END
 
-/// Orders values as the generator writes them: by number, then by text.
-fn cmp_values(a: &str, b: &str) -> core::cmp::Ordering {
-    let num = |v: &str| v.strip_suffix("em").unwrap_or(v).parse::<f64>().unwrap_or(f64::NAN);
-    num(a)
-        .partial_cmp(&num(b))
-        .unwrap_or(core::cmp::Ordering::Equal)
-        .then_with(|| a.cmp(b))
+
+/// The properties of a vertical list's own geometry, and of its item's place.
+const GEOM_PROPS: &[&str] = &["padding-top", "height", "vertical-align"];
+const ITEM_PROPS: &[&str] = &["top", "margin-left", "margin-right"];
+
+// GEOMS-BEGIN
+const GEOMS: &[[&str; 3]] = &[
+    [".3011em", ".15em", "-.15em"],
+    [".8141em", "0", ""],
+    [".3117em", ".15em", "-.15em"],
+    [".3283em", ".15em", "-.15em"],
+    [".1514em", ".15em", "-.15em"],
+    [".1514em", ".2861em", "-.2861em"],
+    [".1514em", ".3473em", "-.3473em"],
+    [".3173em", ".2819em", "-.2819em"],
+    [".3361em", ".15em", "-.15em"],
+    [".3448em", ".3552em", "-.3552em"],
+    [".8913em", "0", ""],
+    [".3117em", ".2083em", "-.2083em"],
+    [".2806em", ".15em", "-.15em"],
+    ["1.3214em", ".686em", "-.686em"],
+    [".8641em", "0", ""],
+    ["", ".522em", ""],
+    [".1645em", ".143em", "-.143em"],
+    [".3361em", ".2861em", "-.2861em"],
+    [".3011em", ".2083em", "-.2083em"],
+    [".3281em", ".143em", "-.143em"],
+    [".3117em", ".2861em", "-.2861em"],
+    [".207em", ".2441em", "-.2441em"],
+    ["1.1003em", ".011em", "-.011em"],
+    [".3173em", ".143em", "-.143em"],
+    ["1.05em", "1.25em", "-1.25em"],
+    [".7401em", "0", ""],
+    [".3011em", ".2861em", "-.2861em"],
+    [".8019em", "0", ""],
+    [".8991em", "0", ""],
+    [".1514em", ".2501em", "-.2501em"],
+    [".938em", "0", ""],
+    [".7519em", "0", ""],
+    [".3175em", ".15em", "-.15em"],
+    [".8413em", "0", ""],
+    ["1.1081em", ".011em", "-.011em"],
+    ["1.0344em", ".5344em", "-.5344em"],
+    ["", "1.5689em", ""],
+    ["1.7844em", "1.2844em", "-1.2844em"],
+    [".3283em", ".2083em", "-.2083em"],
+    [".8491em", "0", ""],
+    ["6.1em", "5.6em", "-5.6em"],
+    ["1.05em", "1.3861em", "-1.3861em"],
+    ["1.05em", "1.2777em", "-1.2777em"],
+    ["1.05em", "1.516em", "-1.516em"],
+    [".6828em", "0", ""],
+    ["", ".8889em", "-.1944em"],
+    ["1.05em", "1.4138em", "-1.4138em"],
+    ["1.3603em", ".686em", "-.686em"],
+    ["1.0064em", ".2645em", "-.2645em"],
+    [".9191em", "0", ""],
+    ["1.2041em", ".59em", "-.59em"],
+    ["", "1.7941em", ""],
+    [".7144em", "0", ""],
+    [".1514em", ".2918em", "-.2918em"],
+    [".3173em", ".2025em", "-.2025em"],
+];
+// GEOMS-END
+// ITEMS-BEGIN
+const ITEMS: &[[&str; 3]] = &[
+    ["", "", ".2778em"],
+    ["", "", ".2222em"],
+    ["-2.55em", "0", ".05em"],
+    ["", "", ".1667em"],
+    ["", "", ".0359em"],
+    ["", "", ".0278em"],
+    ["-2.55em", "-.0359em", ".05em"],
+    ["", "", ".1389em"],
+    ["-3.063em", "", ".05em"],
+    ["", ".1667em", ""],
+    ["", "", ".0576em"],
+    ["-3.113em", "", ".05em"],
+    ["", "", ".0715em"],
+    ["-2.55em", "-.0077em", ".05em"],
+    ["", "", ".0315em"],
+    ["0", "", ""],
+    ["-2.55em", "-.1389em", ".05em"],
+    ["-2.55em", "-.0576em", ".05em"],
+    ["", "", ".0269em"],
+    ["", ".2222em", ""],
+    ["", "", ".044em"],
+    ["", "", ".0077em"],
+    ["-3.05em", "", ""],
+    ["", "", ".109em"],
+    ["-2.55em", "-.0785em", ".05em"],
+    ["", "", ".0785em"],
+    ["-2.357em", "-.0278em", ".0714em"],
+    ["-2.314em", "", ""],
+    ["-3.677em", "", ""],
+    ["-2.55em", "-.044em", ".05em"],
+    ["-3.23em", "", ""],
+    ["", "", ".0572em"],
+    ["", ".2778em", ""],
+    ["", ".2222em", ".0077em"],
+    ["", ".1667em", ".0278em"],
+    ["", ".1667em", ".0359em"],
+    ["-2.357em", "0", ".0714em"],
+    ["", "", ".0139em"],
+    ["-2.5198em", "0", ".05em"],
+    ["-3.322em", "", ""],
+    ["-2.689em", "", ""],
+    ["", "", "1em"],
+    ["-2.4559em", "", ".05em"],
+    ["", "", ".0556em"],
+    ["", ".2222em", ".0785em"],
+    ["-2.357em", "-.0359em", ".0714em"],
+    ["", "2em", ""],
+    ["-2.55em", "-.0715em", ".05em"],
+    ["", "", ".0502em"],
+    ["-1.9em", "0", ""],
+    ["", "", ".1076em"],
+    ["-1.8723em", "0", ""],
+    ["", ".2222em", ".0359em"],
+    ["-2.55em", "", ".05em"],
+    ["", ".2778em", ".0077em"],
+    ["", ".1667em", ".0576em"],
+    ["", "", "2em"],
+    ["-2.55em", "-.0269em", ".05em"],
+    ["", "2em", ".0359em"],
+    ["-2.989em", "", ".05em"],
+    ["-3em", "", ""],
+    ["", ".1667em", ".109em"],
+    ["", "", "-.1667em"],
+    ["-3.2041em", "", ""],
+    ["-2.55em", "-.0278em", ".05em"],
+    ["", ".2222em", ".044em"],
+    ["-3.76em", "", ""],
+    ["-2.26em", "", ""],
+    ["-2.55em", "-.109em", ".05em"],
+    ["", "", ".3333em"],
+    ["-2.55em", "-.1076em", ".05em"],
+    ["", ".0556em", ".2222em"],
+    ["-2.931em", "", ".0714em"],
+    ["", ".1667em", ".1389em"],
+    ["-2.4355em", "0", ".05em"],
+    ["-3.5689em", "", ""],
+    ["-3.0344em", "", ""],
+    ["-3.9789em", "", ""],
+    ["-2.2844em", "", ""],
+    ["-8.26em", "", ""],
+    ["-6.76em", "", ""],
+    ["-5.26em", "", ""],
+    ["-.76em", "", ""],
+    [".74em", "", ""],
+    ["2.24em", "", ""],
+    ["", "", ".0813em"],
+    ["", ".1667em", ".2778em"],
+    ["", ".1667em", ".1076em"],
+    ["-1.809em", "0", ""],
+    ["-1.8479em", "0", ""],
+    ["-2.786em", "", ".0714em"],
+    ["", "", ".0037em"],
+    ["-2.55em", "-.0037em", ".05em"],
+    ["-3.09em", "", ""],
+    ["-3.7941em", "", ""],
+    ["", ".1667em", ".0715em"],
+    ["-2.55em", "-.0315em", ".05em"],
+    ["-2.55em", "-.2222em", ".05em"],
+];
+// ITEMS-END
+
+/// If the declarations of `group` that `decls` holds are one of `table`'s rows (an empty string
+/// for a property it lacks), takes them out and returns the row's class.
+fn combo_class(
+    decls: &mut Vec<(&str, String)>,
+    group: &[&str],
+    table: &[[&str; 3]],
+    prefix: char,
+) -> Option<String> {
+    let mut row = [""; 3];
+    let mut any = false;
+    for (slot, prop) in row.iter_mut().zip(group) {
+        if let Some((_, v)) = decls.iter().find(|(p, _)| p == prop) {
+            *slot = v.as_str();
+            any = true;
+        }
+    }
+    if !any {
+        return None;
+    }
+    let at = table.iter().position(|r| *r == row)?;
+    decls.retain(|(p, _)| !group.contains(p));
+    Some(format!("{prefix}{}", base36(at)))
 }
 
 /// The class standing for `prop: value`, if the stylesheet has one: the property's letter and
-/// the number (`margin-right: .2778em` is `r_2778`, `top: -2.55em` is `yn2_55`). The generator
-/// writes the same names.
+/// the value's position in the property's list in base 36 (the generator writes the same names).
 fn value_class(prop: &str, value: &str) -> Option<String> {
     let value = trim_number(value);
     let (_, values) = VALUES.iter().find(|(p, _)| *p == prop)?;
-    values.binary_search_by(|v| cmp_values(v, &value)).ok()?;
+    let at = values.iter().position(|v| *v == value)?;
     let letter = match prop {
         "height" => 'h',
         "vertical-align" => 'a',
@@ -1059,15 +1320,7 @@ fn value_class(prop: &str, value: &str) -> Option<String> {
         "padding-top" => 'q',
         _ => return None,
     };
-    let mut name = String::with_capacity(value.len() + 2);
-    name.push(letter);
-    let number = value.strip_suffix("em").unwrap_or(&value);
-    let number = number.strip_prefix('-').map_or(number, |n| {
-        name.push('n');
-        n
-    });
-    name.extend(number.chars().map(|c| if c == '.' { '_' } else { c }));
-    Some(name)
+    Some(format!("{letter}{}", base36(at)))
 }
 
 /// The stylesheet the compact output needs.

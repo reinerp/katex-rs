@@ -107,17 +107,26 @@ def main():
                 x = re.sub(r'\.vlist(-t)?(?![\w-])', '.X', s)
                 if x != s:
                     extra.append(x)
+                    if '.vlist-t' in s:
+                        extra.append(x.replace('.X', '.Y'))
         out.append(minify(','.join(sels + extra) + '{' + body + '}'))
-    out.append('.katex .X{display:inline-block;contain:layout;position:relative}')
+    out.append('.katex .X,.katex .Y{display:inline-block;contain:layout;position:relative}')
+    out.append('.katex .Y>span{display:inline-block}')
+    out.append('.katex .Y::before{content:"";display:inline-block;overflow:hidden;width:0}')
     out.append('.katex .W::before{content:"";display:inline-block;overflow:hidden;width:0}')
     for i, (h, v) in enumerate(table('STRUTS')):
         out.append('.katex .u%s::before{content:"";display:inline-block;height:%s;%s}' % (b36(i), h, 'vertical-align:%s' % v if v else ''))
     for i, (h, v) in enumerate(table('PSTRUTS')):
         out.append('.katex .k%s::before{height:%s}' % (b36(i), h))
+    for name, letter, props in (('GEOMS', 'g', ('padding-top', 'height', 'vertical-align')), ('ITEMS', 'i', ('top', 'margin-left', 'margin-right'))):
+        for i, row in enumerate(re.findall(r'\[((?:"[^"]*",?\s*){3})\]', rust_table(name))):
+            vals = re.findall(r'"([^"]*)"', row)
+            decl = ';'.join('%s:%s' % (p, v) for p, v in zip(props, vals) if v)
+            out.append('.katex .%s%s{%s}' % (letter, b36(i), decl))
     for prop, vals in values():
         p = PREFIX[prop]
-        for v in vals:
-            out.append('.katex .%s%s{%s:%s}' % (p, encode(v), prop, v))
+        for i, v in enumerate(vals):
+            out.append('.katex .%s%s{%s:%s}' % (p, b36(i), prop, v))
     css_out = '\n'.join(out) + '\n'
     open(a[1], 'w').write(css_out)
     print('wrote', a[1], len(css_out), 'bytes')
