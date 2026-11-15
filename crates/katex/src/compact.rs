@@ -60,6 +60,11 @@ pub mod levels {
     pub const COMBO: u32 = 1 << 14;
     /// Every step.
     pub const ALL: u32 = (1 << 15) - 1;
+    /// Write `span` as `q`, which is as short as an HTML tag that is neither a formatting
+    /// element, which parsers handle slowly, nor a block gets. The stylesheet takes the quotation
+    /// marks of `q` away. Not part of [`ALL`]: a page that styles `q`, or rich text copied out of
+    /// a formula, would see it.
+    pub const SHORT_TAGS: u32 = 1 << 16;
     /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
     ///
     /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
@@ -1018,9 +1023,17 @@ fn sizing_class(classes: &[String]) -> Option<String> {
     Some(format!("F{}{}", digit(r), digit(s)))
 }
 
+fn tag_name(tag: Tag, levels: u32) -> &'static str {
+    if tag == Tag::Span && levels & levels::SHORT_TAGS != 0 {
+        "q"
+    } else {
+        tag.name()
+    }
+}
+
 fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), ()> {
     out.push('<');
-    out.push_str(el.tag.name());
+    out.push_str(tag_name(el.tag, levels));
     let mut classes: Vec<String> = Vec::new();
     let sizing = if levels & levels::SHORT_NAMES != 0 {
         sizing_class(&el.classes)
@@ -1123,7 +1136,7 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
         }
     }
     out.push_str("</");
-    out.push_str(el.tag.name());
+    out.push_str(tag_name(el.tag, levels));
     out.push('>');
     if out.len() > limit {
         return Err(());

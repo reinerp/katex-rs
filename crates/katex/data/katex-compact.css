@@ -52,15 +52,15 @@
 .katex .vlist-t,.katex .T{display:inline-table;table-layout:fixed;border-collapse:collapse}
 .katex .vlist-r,.katex .R{display:table-row}
 .katex .vlist,.katex .V{display:table-cell;vertical-align:bottom;position:relative}
-.katex .vlist>span,.katex .V>span,.katex .X>span{display:block;height:0;position:relative}
-.katex .vlist>span>span,.katex .V>span>span,.katex .X>span>span{display:inline-block}
-.katex .vlist>span>.pstrut,.katex .V>span>.P,.katex .X>span>.pstrut{overflow:hidden;width:0}
+.katex .vlist>span,.katex .V>span,.katex .X>span,.katex .vlist>q,.katex .V>q,.katex .X>q{display:block;height:0;position:relative}
+.katex .vlist>span>span,.katex .V>span>span,.katex .X>span>span,.katex .vlist>q>q,.katex .V>q>q,.katex .X>q>q{display:inline-block}
+.katex .vlist>span>.pstrut,.katex .V>span>.P,.katex .X>span>.pstrut,.katex .vlist>q>.pstrut,.katex .V>q>.P,.katex .X>q>.pstrut{overflow:hidden;width:0}
 .katex .vlist-t2,.katex .T2{margin-right:-2px}
 .katex .vlist-s,.katex .Z{display:table-cell;vertical-align:bottom;font-size:1px;width:2px;min-width:2px}
 .katex .katex-vbox{display:inline-flex;flex-direction:column;align-items:baseline}
 .katex .katex-thinbox{display:inline-flex;flex-direction:row;width:0;max-width:0}
 .katex .msupsub,.katex .Q{text-align:left}
-.katex .mfrac>span>span{text-align:center}
+.katex .mfrac>span>span,.katex .mfrac>q>q{text-align:center}
 .katex .mfrac .frac-line{display:inline-block;width:100%;border-bottom-style:solid}
 .katex .mfrac .frac-line,.katex .katex-overline .overline-line,.katex .katex-underline .underline-line,.katex .katex-hline,.katex .katex-hdashline,.katex .katex-rule{min-height:1px}
 .katex .mspace,.katex .S{display:inline-block}
@@ -70,7 +70,7 @@
 .katex .llap>.katex-fix,.katex .rlap>.katex-fix,.katex .clap>.katex-fix{display:inline-block}
 .katex .llap>.katex-inner{right:0}
 .katex .rlap>.katex-inner,.katex .clap>.katex-inner{left:0}
-.katex .clap>.katex-inner>span{margin-left:-50%;margin-right:50%}
+.katex .clap>.katex-inner>span,.katex .clap>.katex-inner>q{margin-left:-50%;margin-right:50%}
 .katex .katex-rule{display:inline-block;border:solid 0;position:relative}
 .katex .katex-overline .overline-line,.katex .katex-underline .underline-line,.katex .katex-hline{display:inline-block;width:100%;border-bottom-style:solid}
 .katex .katex-hdashline{display:inline-block;width:100%;border-bottom-style:dashed}
@@ -200,8 +200,8 @@
 .katex .delimsizing.size2{font-family:KaTeX_Size2}
 .katex .delimsizing.size3{font-family:KaTeX_Size3}
 .katex .delimsizing.size4{font-family:KaTeX_Size4}
-.katex .delimsizing.mult .delim-size1>span{font-family:KaTeX_Size1}
-.katex .delimsizing.mult .delim-size4>span{font-family:KaTeX_Size4}
+.katex .delimsizing.mult .delim-size1>span,.katex .delimsizing.mult .delim-size1>q{font-family:KaTeX_Size1}
+.katex .delimsizing.mult .delim-size4>span,.katex .delimsizing.mult .delim-size4>q{font-family:KaTeX_Size4}
 .katex .nulldelimiter{display:inline-block;width:0.12em}
 .katex .delimcenter{position:relative}
 .katex .op-symbol{position:relative}
@@ -253,8 +253,9 @@
 .katex-display.leqno>.katex>.katex-html>.katex-tag{left:0;right:auto}
 .katex-display.fleqn>.katex{text-align:left;padding-left:2em}
 body{counter-reset:katexEqnNo mmlEqnNo}
+q.katex-display::before,q.katex-display::after,q.katex::before,q.katex::after,.katex q::before,.katex q::after{content:none}
 .katex .X,.katex .Y{display:inline-block;contain:layout;position:relative}
-.katex .Y>span{display:inline-block}
+.katex .Y>span,.katex .Y>q{display:inline-block}
 .katex .Y::before{content:"";display:inline-block;overflow:hidden;width:0}
 .katex .W::before{content:"";display:inline-block;overflow:hidden;width:0}
 .katex .u0::before{content:"";display:inline-block;height:1em;vertical-align:-.25em}

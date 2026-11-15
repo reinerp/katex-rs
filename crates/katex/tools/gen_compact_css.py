@@ -109,9 +109,12 @@ def main():
                     extra.append(x)
                     if '.vlist-t' in s:
                         extra.append(x.replace('.X', '.Y'))
+        # With the short tags `span` is `q`: rules that name the tag follow.
+        extra += [re.sub(r'\bspan\b', 'q', t) for t in sels + extra if re.search(r'\bspan\b', t)]
         out.append(minify(','.join(sels + extra) + '{' + body + '}'))
+    out.append('q.katex-display::before,q.katex-display::after,q.katex::before,q.katex::after,.katex q::before,.katex q::after{content:none}')
     out.append('.katex .X,.katex .Y{display:inline-block;contain:layout;position:relative}')
-    out.append('.katex .Y>span{display:inline-block}')
+    out.append('.katex .Y>span,.katex .Y>q{display:inline-block}')
     out.append('.katex .Y::before{content:"";display:inline-block;overflow:hidden;width:0}')
     out.append('.katex .W::before{content:"";display:inline-block;overflow:hidden;width:0}')
     for i, (h, v) in enumerate(table('STRUTS')):

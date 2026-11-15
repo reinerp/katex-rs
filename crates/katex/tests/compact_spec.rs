@@ -217,7 +217,7 @@ fn levels_are_deterministic_and_total() {
     for &(tex, display) in FORMULAS {
         let all = compact(tex, display, levels::ALL, true);
         assert_eq!(all, compact(tex, display, levels::ALL, true));
-        for bit in 0..16 {
+        for bit in 0..17 {
             let one = compact(tex, display, 1 << bit, true);
             let but = compact(tex, display, levels::ALL & !(1 << bit), true);
             assert!(!one.is_empty() && !but.is_empty());
@@ -258,6 +258,24 @@ fn precision_keeps_extents_and_rounds_offsets() {
     assert_ne!(heights(&exact), heights(&all));
     // A small non-zero value stays non-zero.
     assert!(!rounded.contains("margin-right:0em") && !rounded.contains("margin-right:0;"));
+}
+
+#[test]
+fn short_tags_are_an_option() {
+    let plain = compact(r"x_i + \frac{a}{b}", false, levels::ALL, true);
+    assert!(plain.contains("<span") && !plain.contains("<q"));
+    let short = compact(
+        r"x_i + \frac{a}{b}",
+        false,
+        levels::ALL | levels::SHORT_TAGS,
+        true,
+    );
+    assert!(short.starts_with("<q class=\"katex\""), "{short}");
+    assert!(!short.contains("<span") && !short.contains("</span>"));
+    assert_eq!(
+        short.replace("<q", "<span").replace("</q>", "</span>"),
+        plain
+    );
 }
 
 #[test]
