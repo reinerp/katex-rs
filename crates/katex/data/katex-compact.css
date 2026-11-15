@@ -20,8 +20,7 @@
 @font-face{font-family:KaTeX_Size4;src:url(fonts/KaTeX_Size4-Regular.woff2)format("woff2");font-weight:normal;font-style:normal;font-display:block}
 @font-face{font-family:KaTeX_Typewriter;src:url(fonts/KaTeX_Typewriter-Regular.woff2)format("woff2");font-weight:normal;font-style:normal;font-display:block}
 .katex{font:normal 1.21em KaTeX_Main,Times New Roman,serif;line-height:1.2;position:relative;text-indent:0;text-rendering:auto}
-.katex *{-ms-high-contrast-adjust:none !important}
-.katex *{border-color:currentColor}
+.katex .frac-line,.katex .katex-rule,.katex .overline-line,.katex .underline-line,.katex .katex-hline,.katex .katex-hdashline,.katex .fbox,.katex .fcolorbox,.katex .katex-sout,.katex .angl{border-color:currentColor}
 .katex .katex-version::after{content:"0.18.5"}
 .katex .katex-mathml{position:absolute;-webkit-clip-path:inset(50%);clip-path:inset(50%);padding:0;border:0;height:1px;width:1px;overflow:hidden}
 .katex .katex-html{}
@@ -317,6 +316,76 @@ body{counter-reset:katexEqnNo mmlEqnNo}
 .katex .u1l::before{content:"";display:inline-block;height:1.0413em;vertical-align:-.15em}
 .katex .u1m::before{content:"";display:inline-block;height:.7858em;vertical-align:-.3552em}
 .katex .u1n::before{content:"";display:inline-block;height:.786em;vertical-align:-.15em}
+.katex.f,.katex.t0,.katex.t1,.katex.t2,.katex.t3,.katex.t4,.katex.t5,.katex.t6,.katex.t7,.katex.t8,.katex.t9,.katex.ta,.katex.tb,.katex.tc,.katex.td,.katex.te,.katex.tf,.katex.tg,.katex.th,.katex.ti,.katex.tj,.katex.tk,.katex.tl,.katex.tm,.katex.tn,.katex.to,.katex.tp,.katex.tq,.katex.tr,.katex.ts,.katex.tt,.katex.tu,.katex.tv,.katex.tw,.katex.tx,.katex.ty,.katex.tz,.katex.t10,.katex.t11,.katex.t12,.katex.t13{white-space:nowrap}
+.katex.f::before{content:"";display:inline-block;height:var(--h);vertical-align:var(--v,0)}
+.katex.t0::before{content:"";display:inline-block;height:1em;vertical-align:-.25em}
+.katex.t1::before{content:"";display:inline-block;height:.8141em;}
+.katex.t2::before{content:"";display:inline-block;height:.8889em;vertical-align:-.1944em}
+.katex.t3::before{content:"";display:inline-block;height:.625em;vertical-align:-.1944em}
+.katex.t4::before{content:"";display:inline-block;height:.6833em;}
+.katex.t5::before{content:"";display:inline-block;height:.8389em;vertical-align:-.1944em}
+.katex.t6::before{content:"";display:inline-block;height:.8888em;vertical-align:-.1944em}
+.katex.t7::before{content:"";display:inline-block;height:.6444em;}
+.katex.t8::before{content:"";display:inline-block;height:.7278em;vertical-align:-.0833em}
+.katex.t9::before{content:"";display:inline-block;height:.6944em;}
+.katex.ta::before{content:"";display:inline-block;height:.8333em;vertical-align:-.15em}
+.katex.tb::before{content:"";display:inline-block;height:.9501em;vertical-align:-.136em}
+.katex.tc::before{content:"";display:inline-block;height:.5806em;vertical-align:-.15em}
+.katex.td::before{content:"";display:inline-block;height:1.0361em;vertical-align:-.2861em}
+.katex.te::before{content:"";display:inline-block;height:.8444em;vertical-align:-.15em}
+.katex.tf::before{content:"";display:inline-block;height:.8778em;vertical-align:-.1944em}
+.katex.tg::before{content:"";display:inline-block;height:.8974em;vertical-align:-.0833em}
+.katex.th::before{content:"";display:inline-block;height:.8777em;vertical-align:-.1944em}
+.katex.ti::before{content:"";display:inline-block;height:.8193em;vertical-align:-.136em}
+.katex.tj::before{content:"";display:inline-block;height:2.0074em;vertical-align:-.686em}
+.katex.tk::before{content:"";display:inline-block;height:1.1413em;vertical-align:-.25em}
+.katex.tl::before{content:"";display:inline-block;height:.8491em;}
+.katex.tm::before{content:"";display:inline-block;height:2.566em;vertical-align:-1.516em}
+.katex.tn::before{content:"";display:inline-block;height:1.1052em;vertical-align:-.3552em}
+.katex.to::before{content:"";display:inline-block;height:2.4em;vertical-align:-.95em}
+.katex.tp::before{content:"";display:inline-block;height:.6595em;}
+.katex.tq::before{content:"";display:inline-block;height:.9028em;vertical-align:-.2083em}
+.katex.tr::before{content:"";display:inline-block;height:.4306em;}
+.katex.ts::before{content:"";display:inline-block;height:.7944em;vertical-align:-.15em}
+.katex.tt::before{content:"";display:inline-block;height:.7777em;vertical-align:-.0833em}
+.katex.tu::before{content:"";display:inline-block;height:.8413em;}
+.katex.tv::before{content:"";display:inline-block;height:1.2709em;vertical-align:-.2645em}
+.katex.tw::before{content:"";display:inline-block;height:1.0858em;vertical-align:-.1944em}
+.katex.tx::before{content:"";display:inline-block;height:1.7941em;vertical-align:-.59em}
+.katex.ty::before{content:"";display:inline-block;height:.7777em;vertical-align:-.1944em}
+.katex.tz::before{content:"";display:inline-block;height:.854em;vertical-align:-.1944em}
+.katex.t10::before{content:"";display:inline-block;height:.7778em;vertical-align:-.1944em}
+.katex.t11::before{content:"";display:inline-block;height:1.0641em;vertical-align:-.25em}
+.katex.t12::before{content:"";display:inline-block;height:.7167em;vertical-align:-.2861em}
+.katex.t13::before{content:"";display:inline-block;height:.7667em;vertical-align:-.0833em}
+.katex .z0{line-height:0;vertical-align:-.214286em;margin-right:.071429em}
+.katex .z1{line-height:0;vertical-align:-.214286em;margin-left:-.051286em;margin-right:.071429em}
+.katex .z2{line-height:0;vertical-align:.518571em;margin-right:.071429em}
+.katex .z3{line-height:0;vertical-align:.59em;margin-right:.071429em}
+.katex .z4{line-height:0;vertical-align:-.214286em;margin-left:-.011em;margin-right:.071429em}
+.katex .z5{line-height:0;vertical-align:-.214286em;margin-left:-.198429em;margin-right:.071429em}
+.katex .z6{line-height:0;vertical-align:-.214286em;margin-left:-.082286em;margin-right:.071429em}
+.katex .z7{line-height:0;vertical-align:-.214286em;margin-left:-.112143em;margin-right:.071429em}
+.katex .z8{line-height:0;vertical-align:-.2002em;margin-left:-.03892em;margin-right:.09996em}
+.katex .z9{line-height:0;vertical-align:-.214286em;margin-left:-.062857em;margin-right:.071429em}
+.katex .za{line-height:0;vertical-align:-.2002em;margin-right:.09996em}
+.katex .zb{line-height:0;vertical-align:-.257429em;margin-right:.071429em}
+.katex .zc{line-height:0;vertical-align:-.348714em;margin-right:.071429em}
+.katex .zd{line-height:0;vertical-align:-.2002em;margin-left:-.05026em;margin-right:.09996em}
+.katex .ze{line-height:0;vertical-align:-.214286em;margin-left:-.102143em;margin-right:.071429em}
+.katex .zf{line-height:0;vertical-align:-.214286em;margin-left:-.038429em;margin-right:.071429em}
+.katex .zg{line-height:0;vertical-align:.412857em;margin-right:.071429em}
+.katex .zh{line-height:0;vertical-align:-.214286em;margin-left:-.039714em;margin-right:.071429em}
+.katex .zi{line-height:0;vertical-align:-.214286em;margin-left:-.155714em;margin-right:.071429em}
+.katex .zj{line-height:0;vertical-align:-.214286em;margin-left:-.153714em;margin-right:.071429em}
+.katex .zk{line-height:0;vertical-align:.6034em;margin-right:.09996em}
+.katex .zl{line-height:0;vertical-align:.4004em;margin-right:.09996em}
+.katex .zm{line-height:0;vertical-align:-.214286em;margin-left:-.005286em;margin-right:.071429em}
+.katex .zn{line-height:0;vertical-align:-.214286em;margin-left:-.045em;margin-right:.071429em}
+.katex .zo{line-height:0;vertical-align:-.214286em;margin-left:-.317429em;margin-right:.071429em}
+.katex>.katex-newline{display:block}
+.katex-display>.katex>.katex-tag{position:absolute;right:0}
+.katex-display.leqno>.katex>.katex-tag{left:0;right:auto}
 .katex .k0::before{height:2.7em}
 .katex .k1::before{height:3em}
 .katex .k2::before{height:2.5em}

@@ -58,8 +58,21 @@ pub mod levels {
     /// Frequent groups of declarations of a vertical list (its size, and its item's place) have
     /// one class each.
     pub const COMBO: u32 = 1 << 14;
+    /// The steps of the first design, which keeps the formula's `katex-base` blocks. Their output
+    /// is exactly what it was before [`FLAT`] and the steps after it were added.
+    pub const CLASSIC: u32 = (1 << 15) - 1;
+    /// No `katex-base` inline blocks: the formula's content sits directly in the `katex` element
+    /// with `white-space: nowrap`, a `<wbr>` between what were bases (inline formulas only, so they
+    /// wrap where KaTeX's do), and one strut of the union of the bases' struts. Needs
+    /// [`UNWRAP_HTML`]; a formula that has a `\newline` or tag keeps its bases.
+    pub const FLAT: u32 = 1 << 16;
+    /// A vertical list of one item (a lone subscript or superscript, a raised box) is an inline
+    /// element shifted with `position: relative`, not a stack. Needs [`VLIST`].
+    pub const SINGLE: u32 = 1 << 17;
+    /// An empty spacing span is an ordinary inline element with a margin, not an inline block.
+    pub const INLINE_GLUE: u32 = 1 << 18;
     /// Every step.
-    pub const ALL: u32 = (1 << 15) - 1;
+    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE;
     /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
     ///
     /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
@@ -71,7 +84,7 @@ pub mod levels {
     /// The others (spacing as margins, removing wrappers, joining
     /// text) leave every glyph where it was to 1/64 px but let about one formula in twenty
     /// anti-alias a glyph differently at scale 2.
-    pub const EXACT: u32 = ALL & !(UNWRAP_TEXT | TEXT | UNWRAP | GLUE | MERGE | MERGE_CONTENT);
+    pub const EXACT: u32 = CLASSIC & !(UNWRAP_TEXT | TEXT | UNWRAP | GLUE | MERGE | MERGE_CONTENT);
 }
 
 /// The default [`Settings::compact_precision`].
@@ -88,6 +101,8 @@ enum Tag {
     Svg,
     Path,
     Line,
+    /// A line break opportunity (`<wbr>`), written without `/`.
+    Wbr,
 }
 
 impl Tag {
@@ -99,11 +114,12 @@ impl Tag {
             Self::Svg => "svg",
             Self::Path => "path",
             Self::Line => "line",
+            Self::Wbr => "wbr",
         }
     }
 
     const fn is_void(self) -> bool {
-        matches!(self, Self::Img | Self::Path | Self::Line)
+        matches!(self, Self::Img | Self::Path | Self::Line | Self::Wbr)
     }
 }
 
@@ -346,18 +362,15 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     if !is_katex {
         return None;
     }
-    let Node::El(mut el) = convert(
-        &HtmlDomNode::DomSpan(root.clone()),
-        0,
-        Rounding {
-            sf: settings.compact_precision,
-            extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
-        },
-    )?
+    let rounding = Rounding {
+        sf: settings.compact_precision,
+        extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
+    };
+    let Node::El(mut el) = convert(&HtmlDomNode::DomSpan(root.clone()), 0, rounding)?
     else {
         return None;
     };
-    rewrite(&mut el, settings);
+    rewrite(&mut el, settings, rounding);
     let mut out = String::new();
     write_el(
         &mut out,
@@ -460,13 +473,24 @@ enum Role {
     Table,
 }
 
-fn rewrite(root: &mut El, settings: &Settings) {
+fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
     let levels = settings.compact_levels;
     if levels & levels::UNWRAP_HTML != 0 && !settings.fleqn {
         unwrap_html(root, settings.compact_label);
     }
     if levels & levels::DEAD_CLASSES != 0 {
         strip_dead(root);
+    }
+    let strut = if levels & levels::FLAT != 0
+        && levels & levels::UNWRAP_HTML != 0
+        && !settings.fleqn
+    {
+        flatten(root)
+    } else {
+        None
+    };
+    if levels & levels::SINGLE != 0 && levels & levels::VLIST != 0 {
+        single_pass(root, false, levels, rounding);
     }
     if levels
         & (levels::UNWRAP
@@ -478,6 +502,37 @@ fn rewrite(root: &mut El, settings: &Settings) {
         != 0
     {
         walk(root, Role::Normal, levels);
+    }
+    if levels & levels::INLINE_GLUE != 0 {
+        inline_glue(root);
+    }
+    if let Some((height, align)) = strut
+        && let Some(katex) = katex_mut(root)
+    {
+        let table_class = if levels & levels::PSEUDO != 0 {
+            pseudo_class(FSTRUTS, "t", &height, &align)
+        } else {
+            None
+        };
+        if let Some(class) = table_class {
+            katex.classes.push(class);
+        } else if levels & levels::PSEUDO != 0 {
+            // The strut is the formula's `::before`, sized by two custom properties.
+            katex.classes.push("f".to_owned());
+            katex.style.push(("--h", height));
+            if !align.is_empty() {
+                katex.style.push(("--v", align));
+            }
+        } else {
+            katex.classes.push("f".to_owned());
+            let mut style = vec![("height", height)];
+            if !align.is_empty() {
+                style.push(("vertical-align", align));
+            }
+            katex
+                .kids
+                .insert(0, Node::El(span(&["katex-strut"], style, Vec::new())));
+        }
     }
 }
 
@@ -570,12 +625,335 @@ fn walk(el: &mut El, role: Role, levels: u32) {
         }
     }
     if plain && levels & levels::GLUE != 0 {
-        fold_glue(&mut el.kids);
+        fold_glue(&mut el.kids, levels & levels::FLAT != 0);
     }
     if plain && levels & levels::TEXT != 0 {
         merge_text(&mut el.kids);
     }
     merge_adjacent_text(&mut el.kids);
+}
+
+/// Ten-thousandths of an em of a number KaTeX wrote (`-0.25em`, `1.5em`, `0`), or `None`.
+fn em4(value: &str) -> Option<i64> {
+    let n = value.strip_suffix("em").unwrap_or(value);
+    let (neg, n) = n.strip_prefix('-').map_or((false, n), |r| (true, r));
+    let (int, frac) = n.split_once('.').unwrap_or((n, ""));
+    if int.len() > 6
+        || frac.len() > 4
+        || (int.is_empty() && frac.is_empty())
+        || !int.bytes().chain(frac.bytes()).all(|b| b.is_ascii_digit())
+    {
+        return None;
+    }
+    let int: i64 = if int.is_empty() { 0 } else { int.parse().ok()? };
+    let frac: i64 = if frac.is_empty() {
+        0
+    } else {
+        format!("{frac:0<4}").parse().ok()?
+    };
+    let x = int * 10_000 + frac;
+    Some(if neg { -x } else { x })
+}
+
+fn em_str(x: i64) -> String {
+    make_em(x as f64 / 10_000.0)
+}
+
+/// `v` ten-thousandths of an em of the parent as ems of an element whose font is `ratio` times
+/// the parent's, to six decimals: a rounded value changes the layout unit a margin or offset
+/// truncates to for one in a hundred sizes of an em of a page of 16 px.
+fn em_scaled(v: i64, ratio: f64) -> String {
+    let x = v as f64 / 1e4 / ratio;
+    let text = format!("{x:.6}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    if text.is_empty() || text == "-0" {
+        "0".to_owned()
+    } else {
+        format!("{text}em")
+    }
+}
+
+fn span(classes: &[&str], style: Vec<(&'static str, String)>, kids: Vec<Node>) -> El {
+    El {
+        tag: Tag::Span,
+        classes: classes.iter().map(|c| (*c).to_owned()).collect(),
+        style,
+        attrs: Vec::new(),
+        kids,
+    }
+}
+
+/// The part of a base's strut above and below the baseline, in ten-thousandths of an em.
+fn strut_extent(base: &El) -> Option<(i64, i64)> {
+    let Some(Node::El(strut)) = base.kids.first() else {
+        return None;
+    };
+    if !(strut.tag == Tag::Span
+        && strut.classes == ["katex-strut"]
+        && strut.kids.is_empty()
+        && strut.attrs.is_empty())
+    {
+        return None;
+    }
+    let (mut height, mut align) = (None, 0);
+    for (p, v) in &strut.style {
+        match *p {
+            "height" => height = Some(em4(v)?),
+            "vertical-align" => align = em4(v)?,
+            _ => return None,
+        }
+    }
+    let height = height?;
+    Some((height + align, -align))
+}
+
+/// The bases of a formula (`katex-base` inline blocks, each with its strut) become one run of
+/// inline content.
+///
+/// A base is an inline block only so that it is one unit for line breaking, and its strut gives
+/// the line the height the base's content has. As the line box takes the largest extent above and
+/// below the baseline of what it holds, one strut with the largest extents of all the bases gives
+/// the line the same height, and what was a base is a run of inline content in the one that
+/// holds the formula. Where KaTeX allows a line break, between two bases, a `<wbr>` does (the
+/// formula has `white-space: nowrap`, which does not stop it in the browsers tried): not in
+/// display style, where the formula is not wrapped. A formula that has anything else than bases
+/// (a newline, a tag) is left as it is.
+fn flatten(root: &mut El) -> Option<(String, String)> {
+    let display = root.has("katex-display");
+    let katex = katex_mut(root)?;
+    let (mut up, mut down) = (i64::MIN, i64::MIN);
+    for kid in &katex.kids {
+        let Node::El(base) = kid else { return None };
+        if !(base.tag == Tag::Span
+            && base.classes == ["katex-base"]
+            && base.attrs.is_empty()
+            && base.style.is_empty())
+        {
+            return None;
+        }
+        let (a, d) = strut_extent(base)?;
+        up = up.max(a);
+        down = down.max(d);
+    }
+    if katex.kids.is_empty() {
+        return None;
+    }
+    let height = em_str(up + down);
+    let align = if down == 0 {
+        String::new()
+    } else {
+        em_str(-down)
+    };
+    let mut kids = Vec::new();
+    for (i, kid) in mem::take(&mut katex.kids).into_iter().enumerate() {
+        let Node::El(mut base) = kid else { continue };
+        base.kids.remove(0);
+        if i > 0 && !display && !base.kids.is_empty() {
+            kids.push(Node::El(wbr()));
+        }
+        kids.append(&mut base.kids);
+    }
+    katex.kids = kids;
+    Some((height, align))
+}
+
+/// KaTeX's size multipliers: `size1` to `size11`.
+const SIZE_MULT: [f64; 11] = [
+    0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.2, 1.44, 1.728, 2.074, 2.488,
+];
+
+/// The font size of a `katex-sizing reset-sizeA sizeB` span, relative to its parent's.
+fn font_ratio(classes: &[String]) -> Option<f64> {
+    let (mut reset, mut size) = (None, None);
+    for c in classes {
+        if let Some(n) = c.strip_prefix("reset-size") {
+            reset = n.parse::<usize>().ok().filter(|n| (1..=11).contains(n));
+        } else if let Some(n) = c.strip_prefix("size") {
+            size = n.parse::<usize>().ok().filter(|n| (1..=11).contains(n));
+        }
+    }
+    Some(SIZE_MULT[size? - 1] / SIZE_MULT[reset? - 1])
+}
+
+/// Content that is only text and spans that style it, with nothing that is an inline block, so
+/// that its extents are at most those of its text.
+fn is_plain_inline(node: &Node) -> bool {
+    match node {
+        Node::Text(_) => true,
+        Node::El(el) => {
+            el.tag == Tag::Span
+                && el.attrs.is_empty()
+                && el.classes.iter().all(|c| {
+                    DEAD.contains(&c.as_str())
+                        || FONT.contains(&c.as_str())
+                        || is_size_class(c)
+                        || c == "mspace"
+                })
+                && el.style.iter().all(|(p, _)| {
+                    matches!(
+                        *p,
+                        "margin-left"
+                            | "margin-right"
+                            | "vertical-align"
+                            | "line-height"
+                            | "color"
+                    )
+                })
+                && el.kids.iter().all(is_plain_inline)
+        }
+    }
+}
+
+/// Vertical lists of one item become inline elements (see [`single_item`]).
+fn single_pass(el: &mut El, in_wrapper: bool, levels: u32, rounding: Rounding) {
+    let wrappers = el.has("vlist");
+    for kid in &mut el.kids {
+        if let Node::El(child) = kid {
+            single_pass(child, wrappers, levels, rounding);
+        }
+    }
+    if in_wrapper {
+        return;
+    }
+    if el.classes == ["msupsub"]
+        && el.style.is_empty()
+        && el.attrs.is_empty()
+        && let [Node::El(table)] = el.kids.as_mut_slice()
+        && table.has("vlist-t")
+    {
+        to_inline_block(table);
+        if let Some(item) = single_item(table, levels, rounding) {
+            *el = item;
+            return;
+        }
+    }
+    for kid in &mut el.kids {
+        if let Node::El(table) = kid
+            && table.has("vlist-t")
+        {
+            to_inline_block(table);
+            if let Some(item) = single_item(table, levels, rounding) {
+                *table = item;
+            }
+        }
+    }
+}
+
+/// A vertical list of one item (`x_i`, `x^2`, a raised box), as an inline element.
+///
+/// The list's one item is a block at the baseline, with a pstrut that puts the line's baseline
+/// `P` below the block's top, and the block is shifted by `top`: the item's baseline is `P + top`
+/// below the formula's. The same is an inline element shifted by `position: relative; top: P +
+/// top`, which moves what it holds and nothing around it, and the room that the list took above
+/// and below the baseline (its height and depth) is in the formula's strut. The offsets are in
+/// the em of the item, so they are divided by the size the item's size span sets. Only text and
+/// spans around text are put inline: an inline block inside would take part in the line that
+/// holds the formula.
+fn single_item(x: &mut El, levels: u32, _rounding: Rounding) -> Option<El> {
+    if !x.has("X") {
+        return None;
+    }
+    let [Node::El(wrapper)] = x.kids.as_slice() else {
+        return None;
+    };
+    if wrapper.tag != Tag::Span || !wrapper.classes.is_empty() || !wrapper.attrs.is_empty() {
+        return None;
+    }
+    let (mut top, mut left, mut right) = (0, 0, 0);
+    for (p, v) in &wrapper.style {
+        let n = em4(v)?;
+        match *p {
+            "top" => top = n,
+            "margin-left" => left = n,
+            "margin-right" => right = n,
+            _ => return None,
+        }
+    }
+    let [Node::El(pstrut), content @ ..] = wrapper.kids.as_slice() else {
+        return None;
+    };
+    if !(pstrut.has("pstrut")
+        && pstrut.classes.len() == 1
+        && pstrut.kids.is_empty()
+        && pstrut.attrs.is_empty()
+        && pstrut.style.len() == 1)
+    {
+        return None;
+    }
+    let down = em4(pstrut.get_style("height")?)? + top;
+    if content.is_empty() || !content.iter().all(is_plain_inline) {
+        return None;
+    }
+    let Some(Node::El(wrapper)) = x.kids.pop() else {
+        return None;
+    };
+    let mut content = wrapper.kids;
+    content.remove(0);
+    // The element that takes the offsets: the size span, or the one span around the text.
+    let sized = matches!(content.as_slice(), [Node::El(c)]
+        if c.has("katex-sizing") && c.attrs.is_empty() && c.style.is_empty());
+    let single = matches!(content.as_slice(), [Node::El(c)]
+        if c.tag == Tag::Span && c.attrs.is_empty() && c.style.is_empty());
+    let (mut host, ratio) = if sized || single {
+        let Some(Node::El(mut c)) = content.pop() else {
+            return None;
+        };
+        let ratio = if sized { font_ratio(&c.classes)? } else { 1.0 };
+        // An italic correction that the text has is a margin of its own, in the same em: not to
+        // be added to the list's (a sum is not laid out as two margins are).
+        let inner_margin = matches!(c.kids.as_slice(), [Node::El(inner)]
+            if inner.get_style("margin-right").is_some());
+        if sized && levels & levels::MERGE_CONTENT != 0 && !(inner_margin && right != 0) {
+            merge_content(&mut c);
+        }
+        (c, ratio)
+    } else {
+        (span(&[], Vec::new(), content), 1.0)
+    };
+    let scale = |v: i64| {
+        if ratio == 1.0 {
+            em_str(v)
+        } else {
+            em_scaled(v, ratio)
+        }
+    };
+    let mut style = Vec::new();
+    if down != 0 {
+        style.push(("vertical-align", scale(-down)));
+        style.push(("line-height", "0".to_owned()));
+    }
+    if left != 0 {
+        style.push(("margin-left", scale(left)));
+    }
+    if right != 0 {
+        style.push(("margin-right", scale(right)));
+    }
+    style.append(&mut host.style);
+    host.style = style;
+    Some(host)
+}
+
+/// Spacing spans that are empty with a margin are ordinary inline elements with the margin: an
+/// empty inline box with a margin takes the margin's room as an empty inline block does, without
+/// being a box of its own for layout.
+fn inline_glue(el: &mut El) {
+    if glue_of_el(el) {
+        el.classes.clear();
+    }
+    for kid in &mut el.kids {
+        if let Node::El(child) = kid {
+            inline_glue(child);
+        }
+    }
+}
+
+fn glue_of_el(el: &El) -> bool {
+    el.has("mspace")
+        && el.classes.len() == 1
+        && el.kids.is_empty()
+        && el.attrs.is_empty()
+        && el.style.len() == 1
+        && el.style[0].0 == "margin-right"
 }
 
 /// A vertical list of one item: the `X` and the wrapper of its item become one element `Y`. The
@@ -693,13 +1071,20 @@ fn glue_of(node: &Node) -> Option<&str> {
         .then(|| el.style[0].1.as_str())
 }
 
-fn fold_glue(kids: &mut Vec<Node>) {
+fn fold_glue(kids: &mut Vec<Node>, flat: bool) {
     let mut i = 0;
     while i < kids.len() {
         let Some(value) = glue_of(&kids[i]).map(str::to_owned) else {
             i += 1;
             continue;
         };
+        if flat {
+            if fold_glue_flat(kids, i, &value) {
+                continue;
+            }
+            i += 1;
+            continue;
+        }
         let prev_ok = i > 0
             && matches!(&kids[i - 1], Node::El(p) if takes_margin(p) && p.get_style("margin-right").is_none());
         let next_ok = i + 1 < kids.len()
@@ -718,6 +1103,120 @@ fn fold_glue(kids: &mut Vec<Node>) {
             i += 1;
         }
     }
+}
+
+/// The glue at `kids[i]` of a formula without bases: a margin of the span before it or after it
+/// (a size span as well, with the margin in its em; margins already there are added to), of the
+/// one after the line break opportunity that follows it (the break is moved into that span, after
+/// the margin, so that the glue stays at the end of the line before the break), or, between two
+/// glues that have text between them (an operator with its spaces), the margins of a span around
+/// that text. Returns whether the glue went (and `kids[i]` is the next node).
+fn fold_glue_flat(kids: &mut Vec<Node>, i: usize, value: &str) -> bool {
+    if i > 0
+        && let Node::El(p) = &mut kids[i - 1]
+        && let Some(ratio) = margin_host(p, true)
+        && add_margin(p, "margin-right", value, ratio)
+    {
+        kids.remove(i);
+        return true;
+    }
+    if i + 1 < kids.len()
+        && glue_of(&kids[i + 1]).is_none()
+        && let Node::El(n) = &mut kids[i + 1]
+        && let Some(ratio) = margin_host(n, true)
+        && add_margin(n, "margin-left", value, ratio)
+    {
+        kids.remove(i);
+        return true;
+    }
+    if let Some(host) = after_break(kids, i)
+        && let Node::El(n) = &mut kids[host]
+        && let Some(ratio) = margin_host(n, false)
+        && add_margin(n, "margin-left", value, ratio)
+    {
+        n.kids.insert(0, Node::El(wbr()));
+        kids.remove(i + 1);
+        kids.remove(i);
+        return true;
+    }
+    if let (Some(Node::Text(_)), Some(after)) = (kids.get(i + 1), kids.get(i + 2))
+        && let Some(right) = glue_of(after).map(str::to_owned)
+    {
+        let text = kids.remove(i + 1);
+        kids.remove(i + 1);
+        kids[i] = Node::El(span(
+            &[],
+            vec![
+                ("margin-left", value.to_owned()),
+                ("margin-right", right),
+            ],
+            vec![text],
+        ));
+        return true;
+    }
+    false
+}
+
+/// How the em of `el`'s own margins relates to its parent's (1 for a span without a size), if
+/// margins can be put on `el`. `atomic`: also an inline block.
+fn margin_host(el: &El, atomic: bool) -> Option<f64> {
+    if el.tag != Tag::Span || !el.attrs.is_empty() || glue_of_el(el) {
+        return None;
+    }
+    let plain = el
+        .classes
+        .iter()
+        .all(|c| DEAD.contains(&c.as_str()) || FONT.contains(&c.as_str()));
+    if plain {
+        return Some(1.0);
+    }
+    if atomic && takes_margin(el) {
+        return Some(1.0);
+    }
+    if el.has("katex-sizing")
+        && el
+            .classes
+            .iter()
+            .all(|c| DEAD.contains(&c.as_str()) || FONT.contains(&c.as_str()) || is_size_class(c))
+    {
+        return font_ratio(&el.classes);
+    }
+    None
+}
+
+/// Puts `value` (in the parent's em) as `el`'s margin on one side, if it has none there. A sum
+/// of margins is not laid out as the margins one by one: each is a number of layout units.
+fn add_margin(el: &mut El, side: &'static str, value: &str, ratio: f64) -> bool {
+    if el.get_style(side).is_some() {
+        return false;
+    }
+    let Some(v) = em4(value) else { return false };
+    let v = if ratio == 1.0 {
+        value.to_owned()
+    } else {
+        em_scaled(v, ratio)
+    };
+    el.style.push((side, v));
+    true
+}
+
+fn wbr() -> El {
+    El {
+        tag: Tag::Wbr,
+        classes: Vec::new(),
+        style: Vec::new(),
+        attrs: Vec::new(),
+        kids: Vec::new(),
+    }
+}
+
+/// The element after the line break opportunity at `kids[i + 1]`, if it is a plain span (not an
+/// inline block, in which a break would not be one of the line's) that can take a margin.
+fn after_break(kids: &[Node], i: usize) -> Option<usize> {
+    let (Some(Node::El(brk)), Some(Node::El(_))) = (kids.get(i + 1), kids.get(i + 2)) else {
+        return None;
+    };
+    (brk.tag == Tag::Wbr).then_some(i + 2)
 }
 
 /// Adjacent spans with the same classes and style that hold only text are one run of text. The
@@ -1060,6 +1559,9 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
         })
         .collect();
     if levels & levels::COMBO != 0 {
+        if let Some(class) = shift_class(&mut decls) {
+            classes.push(class);
+        }
         for (group, table, prefix) in [(GEOM_PROPS, GEOMS, 'g'), (ITEM_PROPS, ITEMS, 'i')] {
             if let Some(class) = combo_class(&mut decls, group, table, prefix) {
                 classes.push(class);
@@ -1108,6 +1610,10 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
     }
     if out.len() > limit {
         return Err(());
+    }
+    if el.tag == Tag::Wbr {
+        out.push('>');
+        return Ok(());
     }
     if el.tag.is_void() {
         out.push_str("/>");
@@ -1362,9 +1868,89 @@ const PSTRUTS: &[(&str, &str)] = &[
 ];
 // PSTRUTS-END
 
+/// The struts of a formula without bases (height, vertical-align): the class is `t` and the
+/// position in base 36. Generated from the corpus by `tools/gen_compact_flat.py`.
+// FSTRUTS-BEGIN
+const FSTRUTS: &[(&str, &str)] = &[
+    ("1em", "-.25em"),
+    (".8141em", ""),
+    (".8889em", "-.1944em"),
+    (".625em", "-.1944em"),
+    (".6833em", ""),
+    (".8389em", "-.1944em"),
+    (".8888em", "-.1944em"),
+    (".6444em", ""),
+    (".7278em", "-.0833em"),
+    (".6944em", ""),
+    (".8333em", "-.15em"),
+    (".9501em", "-.136em"),
+    (".5806em", "-.15em"),
+    ("1.0361em", "-.2861em"),
+    (".8444em", "-.15em"),
+    (".8778em", "-.1944em"),
+    (".8974em", "-.0833em"),
+    (".8777em", "-.1944em"),
+    (".8193em", "-.136em"),
+    ("2.0074em", "-.686em"),
+    ("1.1413em", "-.25em"),
+    (".8491em", ""),
+    ("2.566em", "-1.516em"),
+    ("1.1052em", "-.3552em"),
+    ("2.4em", "-.95em"),
+    (".6595em", ""),
+    (".9028em", "-.2083em"),
+    (".4306em", ""),
+    (".7944em", "-.15em"),
+    (".7777em", "-.0833em"),
+    (".8413em", ""),
+    ("1.2709em", "-.2645em"),
+    ("1.0858em", "-.1944em"),
+    ("1.7941em", "-.59em"),
+    (".7777em", "-.1944em"),
+    (".854em", "-.1944em"),
+    (".7778em", "-.1944em"),
+    ("1.0641em", "-.25em"),
+    (".7167em", "-.2861em"),
+    (".7667em", "-.0833em"),
+];
+// FSTRUTS-END
+
+/// The offsets of an item that is shifted in place (vertical-align, margin-left, margin-right; the
+/// item has `line-height: 0`): the class is `z` and the position in base 36.
+// SHIFTS-BEGIN
+const SHIFTS: &[[&str; 3]] = &[
+    ["-.214286em", "", ".071429em"],
+    ["-.214286em", "-.051286em", ".071429em"],
+    [".518571em", "", ".071429em"],
+    [".59em", "", ".071429em"],
+    ["-.214286em", "-.011em", ".071429em"],
+    ["-.214286em", "-.198429em", ".071429em"],
+    ["-.214286em", "-.082286em", ".071429em"],
+    ["-.214286em", "-.112143em", ".071429em"],
+    ["-.2002em", "-.03892em", ".09996em"],
+    ["-.214286em", "-.062857em", ".071429em"],
+    ["-.2002em", "", ".09996em"],
+    ["-.257429em", "", ".071429em"],
+    ["-.348714em", "", ".071429em"],
+    ["-.2002em", "-.05026em", ".09996em"],
+    ["-.214286em", "-.102143em", ".071429em"],
+    ["-.214286em", "-.038429em", ".071429em"],
+    [".412857em", "", ".071429em"],
+    ["-.214286em", "-.039714em", ".071429em"],
+    ["-.214286em", "-.155714em", ".071429em"],
+    ["-.214286em", "-.153714em", ".071429em"],
+    [".6034em", "", ".09996em"],
+    [".4004em", "", ".09996em"],
+    ["-.214286em", "-.005286em", ".071429em"],
+    ["-.214286em", "-.045em", ".071429em"],
+    ["-.214286em", "-.317429em", ".071429em"],
+];
+// SHIFTS-END
+
 /// The properties of a vertical list's own geometry, and of its item's place.
 const GEOM_PROPS: &[&str] = &["padding-top", "height", "vertical-align"];
 const ITEM_PROPS: &[&str] = &["top", "margin-left", "margin-right"];
+const SHIFT_PROPS: &[&str] = &["vertical-align", "margin-left", "margin-right"];
 
 // GEOMS-BEGIN
 const GEOMS: &[[&str; 3]] = &[
@@ -1550,6 +2136,23 @@ fn combo_class(
     let at = table.iter().position(|r| *r == row)?;
     decls.retain(|(p, _)| !group.contains(p));
     Some(format!("{prefix}{}", base36(at)))
+}
+
+/// If `decls` shift an item in place (`line-height: 0` and offsets) as a row of `SHIFTS` does,
+/// takes them out and returns the row's class.
+fn shift_class(decls: &mut Vec<(&str, String)>) -> Option<String> {
+    if !decls.iter().any(|(p, v)| *p == "line-height" && v == "0") {
+        return None;
+    }
+    let mut row = [""; 3];
+    for (slot, prop) in row.iter_mut().zip(SHIFT_PROPS) {
+        if let Some((_, v)) = decls.iter().find(|(p, _)| p == prop) {
+            *slot = v.as_str();
+        }
+    }
+    let at = SHIFTS.iter().position(|r| *r == row)?;
+    decls.retain(|(p, _)| *p != "line-height" && !SHIFT_PROPS.contains(p));
+    Some(format!("z{}", base36(at)))
 }
 
 /// The class standing for `prop: value`, if the stylesheet has one: the property's letter and

@@ -184,17 +184,20 @@ fn text_is_that_of_the_html_branch() {
 fn label_and_roles() {
     let with = compact(r"a<b", false, levels::ALL, true);
     assert!(
-        with.starts_with(r#"<span class="katex" role="math" aria-label="a&lt;b">"#),
+        with.starts_with(r#"<span class="katex "#)
+            && with.contains(r#" role="math" aria-label="a&lt;b""#),
         "{with}"
     );
     assert!(!with.contains("<math"));
     let without = compact(r"a<b", false, levels::ALL, false);
     assert!(
-        without.starts_with(r#"<span class="katex" aria-hidden="true">"#),
+        without.starts_with(r#"<span class="katex "#)
+            && without.contains(r#" aria-hidden="true""#),
         "{without}"
     );
     let display = compact(r"a", true, levels::ALL, true);
-    assert!(display.starts_with(r#"<span class="katex-display"><span class="katex" role="math""#));
+    assert!(display.starts_with(r#"<span class="katex-display"><span class="katex "#)
+            && display.contains(r#" role="math""#));
 }
 
 #[test]
@@ -217,7 +220,7 @@ fn levels_are_deterministic_and_total() {
     for &(tex, display) in FORMULAS {
         let all = compact(tex, display, levels::ALL, true);
         assert_eq!(all, compact(tex, display, levels::ALL, true));
-        for bit in 0..16 {
+        for bit in 0..19 {
             let one = compact(tex, display, 1 << bit, true);
             let but = compact(tex, display, levels::ALL & !(1 << bit), true);
             assert!(!one.is_empty() && !but.is_empty());
@@ -282,7 +285,7 @@ fn output_size_limit_applies() {
 fn deeply_nested_input_renders() {
     let nested = format!("{}x{}", r"\sqrt{".repeat(12), "}".repeat(12));
     let out = compact(&nested, false, levels::ALL, true);
-    assert!(out.starts_with("<span class=\"katex\""), "{out}");
+    assert!(out.starts_with("<span class=\"katex"), "{out}");
 }
 
 /// Rewriting the tree is recursive but bounded: the deepest formula the nesting limit allows

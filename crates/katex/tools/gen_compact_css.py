@@ -90,6 +90,14 @@ def main():
     for sel, body in re.findall(r'([^{}]+)\{([^{}]*)\}', rest):
         sels = [s.strip() for s in sel.split(',')]
         extra = []
+        if sels == ['.katex *']:
+            # A rule for every element makes the browser check every element's ancestors. The
+            # old Edge's `-ms-high-contrast-adjust` is not known to other browsers, and the
+            # border colour only matters for the elements that have a border.
+            if 'border-color' not in body:
+                continue
+            sels = ['.katex ' + c for c in ('.frac-line', '.katex-rule', '.overline-line', '.underline-line', '.katex-hline',
+                                            '.katex-hdashline', '.fbox', '.fcolorbox', '.katex-sout', '.angl')]
         for s in sels:
             t = s
             # katex-sizing + reset-sizeA + sizeB (or fontsize-ensurer) -> FAB
@@ -116,6 +124,21 @@ def main():
     out.append('.katex .W::before{content:"";display:inline-block;overflow:hidden;width:0}')
     for i, (h, v) in enumerate(table('STRUTS')):
         out.append('.katex .u%s::before{content:"";display:inline-block;height:%s;%s}' % (b36(i), h, 'vertical-align:%s' % v if v else ''))
+    fstruts = table('FSTRUTS')
+    # A formula without bases: `.f`, or `.tN` for a strut that has a class, is `nowrap` (as its
+    # bases were) and the strut is a pseudo-element of the formula itself.
+    out.append(','.join(['.katex.f'] + ['.katex.t%s' % b36(i) for i in range(len(fstruts))]) + '{white-space:nowrap}')
+    out.append('.katex.f::before{content:"";display:inline-block;height:var(--h);vertical-align:var(--v,0)}')
+    for i, (h, v) in enumerate(fstruts):
+        out.append('.katex.t%s::before{content:"";display:inline-block;height:%s;%s}' % (b36(i), h, 'vertical-align:%s' % v if v else ''))
+    for i, row in enumerate(re.findall(r'\[((?:"[^"]*",?\s*){3})\]', rust_table('SHIFTS'))):
+        vals = re.findall(r'"([^"]*)"', row)
+        decl = ';'.join(['line-height:0'] + ['%s:%s' % (p, v) for p, v in zip(('vertical-align', 'margin-left', 'margin-right'), vals) if v])
+        out.append('.katex .z%s{%s}' % (b36(i), decl))
+    # `unwrap_html` leaves the children of `katex-html` in `katex`.
+    out.append('.katex>.katex-newline{display:block}')
+    out.append('.katex-display>.katex>.katex-tag{position:absolute;right:0}')
+    out.append('.katex-display.leqno>.katex>.katex-tag{left:0;right:auto}')
     for i, (h, v) in enumerate(table('PSTRUTS')):
         out.append('.katex .k%s::before{height:%s}' % (b36(i), h))
     for name, letter, props in (('GEOMS', 'g', ('padding-top', 'height', 'vertical-align')), ('ITEMS', 'i', ('top', 'margin-left', 'margin-right'))):
