@@ -31,6 +31,20 @@ def values():
     return out
 
 
+def table(name):
+    return re.findall(r'\("([^"]*)",\s*"([^"]*)"\)', rust_table(name))
+
+
+def b36(n):
+    digits = '0123456789abcdefghijklmnopqrstuvwxyz'
+    out = ''
+    while True:
+        out = digits[n % 36] + out
+        n //= 36
+        if n == 0:
+            return out
+
+
 def minify(css):
     css = re.sub(r'/\*.*?\*/', '', css, flags=re.S)
     css = re.sub(r'\s+', ' ', css)
@@ -51,7 +65,7 @@ def encode(v):
 
 
 PREFIX = {'height': 'h', 'vertical-align': 'a', 'top': 'y', 'margin-left': 'l', 'margin-right': 'r',
-          'min-width': 'm', 'width': 'w', 'border-bottom-width': 'x', 'position': 'p'}
+          'min-width': 'm', 'width': 'w', 'border-bottom-width': 'x', 'padding-top': 'q'}
 
 
 def main():
@@ -87,7 +101,19 @@ def main():
                 t = re.sub(r'\.%s(?![\w-])' % re.escape(old), '.' + new, t)
             if t != s:
                 extra.append(t)
+            # The vertical list is one inline block, X, in the compact output: the rules that
+            # look at its table or its cell (but not the table's own) apply to it.
+            if s not in ('.katex .vlist-t', '.katex .vlist-t2', '.katex .vlist', '.katex .vlist-r', '.katex .vlist-s'):
+                x = re.sub(r'\.vlist(-t)?(?![\w-])', '.X', s)
+                if x != s:
+                    extra.append(x)
         out.append(minify(','.join(sels + extra) + '{' + body + '}'))
+    out.append('.katex .X{display:inline-block;contain:layout;position:relative}')
+    out.append('.katex .W::before{content:"";display:inline-block;overflow:hidden;width:0}')
+    for i, (h, v) in enumerate(table('STRUTS')):
+        out.append('.katex .u%s::before{content:"";display:inline-block;height:%s;%s}' % (b36(i), h, 'vertical-align:%s' % v if v else ''))
+    for i, (h, v) in enumerate(table('PSTRUTS')):
+        out.append('.katex .k%s::before{height:%s}' % (b36(i), h))
     for prop, vals in values():
         p = PREFIX[prop]
         for v in vals:

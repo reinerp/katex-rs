@@ -43,8 +43,14 @@ pub mod levels {
     pub const VLIST: u32 = 1 << 9;
     /// Replace the struts' elements with pseudo-elements.
     pub const PSEUDO: u32 = 1 << 10;
+    /// Also remove wrappers that hold only text, which then sits in its parent's text run. Glyphs
+    /// are then placed by the sum of unrounded advances and not by sums of layout units that
+    /// are rounded per element, so one in a few hundred glyphs lands a pixel away.
+    pub const UNWRAP_TEXT: u32 = 1 << 11;
     /// Every step.
-    pub const ALL: u32 = (1 << 11) - 1;
+    pub const ALL: u32 = (1 << 12) - 1;
+    /// Every step that keeps the pixels exactly as KaTeX's.
+    pub const EXACT: u32 = ALL & !(UNWRAP_TEXT | TEXT);
 }
 
 /// Trees deeper than this are not rewritten.
@@ -281,11 +287,380 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
 // ---------------------------------------------------------------------------------------------
 // Rewrite steps
 
+/// Class names that only set (inherited) font properties.
+const FONT: &[&str] = &[
+    "mathnormal", "mathit", "mathrm", "mathbf", "boldsymbol", "amsrm", "mathbb", "textbb", "mathcal",
+    "mathfrak", "textfrak", "mathboldfrak", "textboldfrak", "mathtt", "mathscr", "textscr", "mathsf",
+    "textsf", "mathboldsf", "textboldsf", "mathsfit", "mathitsf", "textitsf", "mainrm", "textbf",
+    "textit", "textrm", "texttt",
+];
+
+fn is_size_class(c: &str) -> bool {
+    c == "katex-sizing"
+        || c.strip_prefix("reset-size")
+            .or_else(|| c.strip_prefix("size"))
+            .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Whether the children of `el` sit in an ordinary inline formatting context in which no CSS rule
+/// looks at their parent: `el` is a plain wrapper, a font or size span, a base or the formula.
+fn plain_parent(el: &El) -> bool {
+    el.tag == Tag::Span
+        && el.classes.iter().all(|c| {
+            DEAD.contains(&c.as_str())
+                || FONT.contains(&c.as_str())
+                || is_size_class(c)
+                || matches!(c.as_str(), "katex" | "katex-base" | "msupsub")
+        })
+}
+
+/// A span with nothing that sets any property: it only groups.
+fn is_neutral(el: &El) -> bool {
+    el.tag == Tag::Span
+        && el.style.is_empty()
+        && el.attrs.is_empty()
+        && el.classes.iter().all(|c| DEAD.contains(&c.as_str()))
+}
+
+/// Whether `el` is an inline-level box a margin can be put on instead of next to it.
+fn takes_margin(el: &El) -> bool {
+    el.tag == Tag::Span
+        && el.classes.iter().all(|c| {
+            DEAD.contains(&c.as_str())
+                || FONT.contains(&c.as_str())
+                || matches!(c.as_str(), "msupsub" | "X")
+        })
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Role {
+    Normal,
+    /// A child of a `vlist` cell or of an `X`: a block that holds one stacked item.
+    Wrapper,
+    /// What a wrapper holds: a pstrut and one inline-block.
+    Content,
+    /// Table rows and cells of the old vertical list.
+    Table,
+}
+
 fn rewrite(root: &mut El, settings: &Settings) {
     let levels = settings.compact_levels;
     if levels & levels::UNWRAP_HTML != 0 && !settings.fleqn {
         unwrap_html(root, settings.compact_label);
     }
+    if levels & levels::DEAD_CLASSES != 0 {
+        strip_dead(root);
+    }
+    if levels & (levels::UNWRAP | levels::VLIST | levels::PSEUDO | levels::GLUE | levels::MERGE | levels::TEXT) != 0 {
+        walk(root, Role::Normal, levels);
+    }
+}
+
+fn strip_dead(el: &mut El) {
+    el.classes.retain(|c| !DEAD.contains(&c.as_str()) || c == "katex-error");
+    for kid in &mut el.kids {
+        if let Node::El(child) = kid {
+            strip_dead(child);
+        }
+    }
+}
+
+fn walk(el: &mut El, role: Role, levels: u32) {
+    let kid_role = if el.has("X") || el.has("vlist") {
+        Role::Wrapper
+    } else if role == Role::Wrapper {
+        Role::Content
+    } else if el.has("vlist-t") || el.has("vlist-r") {
+        Role::Table
+    } else {
+        Role::Normal
+    };
+    if levels & levels::VLIST != 0 && kid_role == Role::Normal {
+        for kid in &mut el.kids {
+            if let Node::El(child) = kid {
+                if child.has("vlist-t") {
+                    to_inline_block(child);
+                }
+            }
+        }
+    }
+    for kid in &mut el.kids {
+        if let Node::El(child) = kid {
+            walk(child, kid_role, levels);
+        }
+    }
+    if kid_role == Role::Wrapper && levels & levels::PSEUDO != 0 && el.has("X") {
+        for kid in &mut el.kids {
+            if let Node::El(wrapper) = kid {
+                pstrut_to_pseudo(wrapper);
+            }
+        }
+    }
+    if levels & levels::PSEUDO != 0 && el.has("katex-base") {
+        strut_to_pseudo(el);
+    }
+    let plain = kid_role == Role::Normal && plain_parent(el);
+    if plain && levels & levels::UNWRAP != 0 {
+        let kids = core::mem::take(&mut el.kids);
+        for kid in kids {
+            match kid {
+                Node::El(child)
+                    if is_neutral(&child)
+                        && (levels & levels::UNWRAP_TEXT != 0
+                            || child.kids.is_empty()
+                            || child.kids.iter().any(|k| matches!(k, Node::El(_)))) =>
+                {
+                    el.kids.extend(child.kids);
+                }
+                other => el.kids.push(other),
+            }
+        }
+    }
+    if plain && levels & levels::MERGE != 0 {
+        for kid in &mut el.kids {
+            if let Node::El(child) = kid {
+                if child.has("msupsub")
+                    && child.style.is_empty()
+                    && child.kids.len() == 1
+                    && matches!(&child.kids[0], Node::El(c) if c.has("X"))
+                {
+                    let Some(Node::El(mut inner)) = child.kids.pop() else { continue };
+                    inner.classes.push("msupsub".to_owned());
+                    child.classes.clear();
+                    *kid = Node::El(inner);
+                }
+            }
+        }
+    }
+    if plain && levels & levels::GLUE != 0 {
+        fold_glue(&mut el.kids);
+    }
+    if plain && levels & levels::TEXT != 0 {
+        merge_text(&mut el.kids);
+    }
+    merge_adjacent_text(&mut el.kids);
+}
+
+fn merge_adjacent_text(kids: &mut Vec<Node>) {
+    let mut out: Vec<Node> = Vec::with_capacity(kids.len());
+    for kid in core::mem::take(kids) {
+        match (out.last_mut(), kid) {
+            (Some(Node::Text(a)), Node::Text(b)) => a.push_str(&b),
+            (_, kid) => out.push(kid),
+        }
+    }
+    *kids = out;
+}
+
+/// An empty `mspace` with only a `margin-right` is horizontal space: an empty inline-block of
+/// that width. The same space as a margin on the box before it (or after it) is the same layout,
+/// as long as that box is inline-level and has no margin of that side yet.
+fn glue_of(node: &Node) -> Option<&str> {
+    let Node::El(el) = node else { return None };
+    (el.has("mspace")
+        && el.classes.len() == 1
+        && el.kids.is_empty()
+        && el.attrs.is_empty()
+        && el.style.len() == 1
+        && el.style[0].0 == "margin-right")
+        .then(|| el.style[0].1.as_str())
+}
+
+fn fold_glue(kids: &mut Vec<Node>) {
+    let mut i = 0;
+    while i < kids.len() {
+        let Some(value) = glue_of(&kids[i]).map(str::to_owned) else {
+            i += 1;
+            continue;
+        };
+        let prev_ok = i > 0
+            && matches!(&kids[i - 1], Node::El(p) if takes_margin(p) && p.get_style("margin-right").is_none());
+        let next_ok = i + 1 < kids.len()
+            && matches!(&kids[i + 1], Node::El(n) if takes_margin(n) && n.get_style("margin-left").is_none() && glue_of(&kids[i + 1]).is_none());
+        if prev_ok {
+            if let Node::El(p) = &mut kids[i - 1] {
+                p.style.push(("margin-right", value));
+            }
+            kids.remove(i);
+        } else if next_ok {
+            if let Node::El(n) = &mut kids[i + 1] {
+                n.style.insert(0, ("margin-left", value));
+            }
+            kids.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+}
+
+/// Adjacent spans with the same classes and style that hold only text are one run of text. The
+/// KaTeX fonts have no kerning or ligatures, so a glyph is placed the same either way. A
+/// `margin-right` may be on the last one only.
+fn merge_text(kids: &mut Vec<Node>) {
+    let mut out: Vec<Node> = Vec::with_capacity(kids.len());
+    for kid in core::mem::take(kids) {
+        let mergeable = match (out.last(), &kid) {
+            (Some(Node::El(a)), Node::El(b)) => {
+                text_only(a)
+                    && text_only(b)
+                    && a.tag == Tag::Span
+                    && b.tag == Tag::Span
+                    && a.classes == b.classes
+                    && a.attrs.is_empty()
+                    && b.attrs.is_empty()
+                    && a.get_style("margin-right").is_none()
+                    && a.get_style("margin-left").is_none()
+                    && b.get_style("margin-left").is_none()
+                    && a.style.iter().filter(|(p, _)| *p != "margin-right").eq(b
+                        .style
+                        .iter()
+                        .filter(|(p, _)| *p != "margin-right"))
+            }
+            _ => false,
+        };
+        match (mergeable, out.last_mut(), kid) {
+            (true, Some(Node::El(a)), Node::El(b)) => {
+                a.kids.extend(b.kids);
+                if let Some(m) = b.style.into_iter().find(|(p, _)| *p == "margin-right") {
+                    a.style.push(m);
+                }
+            }
+            (_, _, kid) => out.push(kid),
+        }
+    }
+    *kids = out;
+}
+
+fn text_only(el: &El) -> bool {
+    !el.kids.is_empty() && el.kids.iter().all(|k| matches!(k, Node::Text(_)))
+}
+
+/// The table of a vertical list as one inline block.
+///
+/// In `katex.css` a `vlist-t` is an inline table whose first row holds the stacked items in a
+/// cell of the full height above the baseline, bottom-aligned, so that the items' zero-height
+/// blocks start at the baseline; a second row of the depth's height hangs below it. An inline
+/// block with `padding-top` for the first row and `height` for the second starts the blocks at
+/// the same place and is as tall; `contain: layout` puts its baseline at the bottom edge, as the
+/// table's is, and `vertical-align` lowers it by the depth. The table's `vlist-s` cell and the `-2px` margin that compensates for it go.
+fn to_inline_block(table: &mut El) {
+    let rows: Vec<&El> = table
+        .kids
+        .iter()
+        .filter_map(|k| if let Node::El(e) = k { Some(e) } else { None })
+        .collect();
+    if rows.len() != table.kids.len()
+        || !(1..=2).contains(&rows.len())
+        || !table.style.is_empty()
+        || !table.attrs.is_empty()
+        || !table.classes.iter().all(|c| matches!(c.as_str(), "vlist-t" | "vlist-t2"))
+    {
+        return;
+    }
+    let cell = |row: &El, nth: usize| -> Option<El> {
+        match row.kids.get(nth) {
+            Some(Node::El(e)) if e.has("vlist") && e.classes.len() == 1 => Some(e.clone()),
+            _ => None,
+        }
+    };
+    let first = rows[0];
+    let two = rows.len() == 2;
+    let (Some(top), true) = (
+        cell(first, 0),
+        first.has("vlist-r")
+            && (if two {
+                first.kids.len() == 2
+                    && matches!(&first.kids[1], Node::El(s) if s.has("vlist-s"))
+                    && rows[1].has("vlist-r")
+                    && rows[1].kids.len() == 1
+            } else {
+                first.kids.len() == 1
+            }),
+    ) else {
+        return;
+    };
+    let depth = if two { cell(rows[1], 0) } else { None };
+    if two && depth.is_none() {
+        return;
+    }
+    let (Some(h), true) = (
+        top.get_style("height").map(str::to_owned),
+        top.style.len() == 1 && table.has("vlist-t2") == two,
+    ) else {
+        return;
+    };
+    let d = match &depth {
+        Some(cell) => match (cell.get_style("height"), cell.style.len()) {
+            (Some(d), 1) => Some(d.to_owned()),
+            _ => return,
+        },
+        None => None,
+    };
+    let mut style = vec![("padding-top", h)];
+    if let Some(d) = d {
+        // Lowered by its own height, so that the first row's bottom is on the baseline.
+        let lowered = d.strip_prefix('-').map_or_else(|| format!("-{d}"), str::to_owned);
+        style.push(("height", d));
+        style.push(("vertical-align", lowered));
+    }
+    table.classes = vec!["X".to_owned()];
+    table.style = style;
+    table.kids = top.kids;
+}
+
+/// A pstrut is an inline-block as tall as `height` and no wide, first in the wrapper: its
+/// `::before` is the same box.
+fn pstrut_to_pseudo(wrapper: &mut El) {
+    let Some(Node::El(first)) = wrapper.kids.first() else { return };
+    if !(first.has("pstrut") && first.classes.len() == 1 && first.kids.is_empty() && first.attrs.is_empty() && first.style.len() == 1) {
+        return;
+    }
+    let Some(height) = first.get_style("height") else { return };
+    let Some(class) = pseudo_class(PSTRUTS, "k", height, "") else { return };
+    wrapper.classes.push("W".to_owned());
+    wrapper.classes.push(class);
+    wrapper.kids.remove(0);
+}
+
+/// A strut is an inline-block of the formula's height, first in its base: its `::before`.
+fn strut_to_pseudo(base: &mut El) {
+    let Some(Node::El(first)) = base.kids.first() else { return };
+    if !(first.has("katex-strut") && first.classes.len() == 1 && first.kids.is_empty() && first.attrs.is_empty()) {
+        return;
+    }
+    let mut height = None;
+    let mut align = "";
+    for (p, v) in &first.style {
+        match *p {
+            "height" => height = Some(v.as_str()),
+            "vertical-align" => align = v.as_str(),
+            _ => return,
+        }
+    }
+    let Some(height) = height else { return };
+    let Some(class) = pseudo_class(STRUTS, "u", height, align) else { return };
+    base.classes.push(class);
+    base.kids.remove(0);
+}
+
+/// The class of a `::before` whose height (and vertical alignment) the stylesheet has.
+fn pseudo_class(table: &[(&str, &str)], prefix: &str, height: &str, align: &str) -> Option<String> {
+    let height = trim_number(height);
+    let align = trim_number(align);
+    let i = table.iter().position(|(h, a)| *h == height && *a == align)?;
+    Some(format!("{prefix}{}", base36(i)))
+}
+
+fn base36(mut n: usize) -> String {
+    let mut digits = Vec::new();
+    loop {
+        digits.push(char::from_digit((n % 36) as u32, 36).unwrap_or('0'));
+        n /= 36;
+        if n == 0 {
+            break;
+        }
+    }
+    digits.iter().rev().collect()
 }
 
 /// The `katex` element: the root, or the root's only child in display mode.
@@ -487,32 +862,31 @@ const VALUES: &[(&str, &[&str])] = &[
     (
         "height",
         &[
-            ".011em", ".143em", ".15em", ".1514em", ".1645em", ".2025em", ".207em", ".2083em",
-            ".2441em", ".2501em", ".2645em", ".2806em", ".2819em", ".2861em", ".2918em",
-            ".3011em", ".3117em", ".3173em", ".3175em", ".3281em", ".3283em", ".3361em",
-            ".3448em", ".3473em", ".3552em", ".4306em", ".4445em", ".522em", ".5344em",
-            ".5806em", ".59em", ".5945em", ".6111em", ".625em", ".6389em", ".6444em",
-            ".6595em", ".6667em", ".6828em", ".6833em", ".686em", ".6887em", ".6944em",
-            ".7144em", ".7167em", ".7278em", ".7333em", ".7335em", ".7401em", ".7519em",
-            ".7667em", ".7719em", ".7778em", ".7804em", ".7858em", ".786em", ".7917em",
-            ".8019em", ".8095em", ".8141em", ".8193em", ".8333em", ".8389em", ".8413em",
-            ".8444em", ".8491em", ".854em", ".8641em", ".8694em", ".8778em", ".8804em",
-            ".8889em", ".8913em", ".8974em", ".8991em", ".9028em", ".9191em", ".938em",
-            ".9385em", ".9501em", ".9694em", "1em", "1.0064em", "1.0344em", "1.0361em",
-            "1.0413em", "1.05em", "1.0858em", "1.09em", "1.1003em", "1.1081em", "1.1113em",
-            "1.1413em", "1.2041em", "1.25em", "1.2503em", "1.2581em", "1.2709em", "1.2777em",
-            "1.2844em", "1.3214em", "1.3603em", "1.3861em", "1.4138em", "1.516em", "1.5689em",
-            "1.68em", "1.7844em", "1.7941em", "1.8941em", "2.0074em", "2.0463em", "2.3em",
-            "2.4em", "2.5em", "2.566em", "2.7em", "3em", "3.008em", "3.0344em", "3.05em",
-            "3.5689em", "3.68em", "3.7941em", "3.8941em", "5.6em", "6.1em",
+            ".011em", ".143em", ".15em", ".2025em", ".2083em", ".2441em", ".2501em", ".2645em",
+            ".2819em", ".2861em", ".2918em", ".3473em", ".3552em", ".4306em", ".4445em",
+            ".522em", ".5344em", ".5806em", ".59em", ".5945em", ".6111em", ".625em", ".6389em",
+            ".6444em", ".6595em", ".6667em", ".6833em", ".686em", ".6944em", ".7167em",
+            ".7278em", ".7333em", ".7335em", ".7667em", ".7719em", ".7778em", ".7804em",
+            ".7858em", ".786em", ".7917em", ".8019em", ".8095em", ".8141em", ".8193em",
+            ".8333em", ".8389em", ".8413em", ".8444em", ".8491em", ".854em", ".8641em",
+            ".8694em", ".8778em", ".8804em", ".8889em", ".8974em", ".8991em", ".9028em",
+            ".938em", ".9385em", ".9501em", ".9694em", "1em", "1.0361em", "1.0413em",
+            "1.0858em", "1.1113em", "1.1413em", "1.25em", "1.2503em", "1.2581em", "1.2709em",
+            "1.2777em", "1.2844em", "1.3861em", "1.4138em", "1.516em", "1.5689em", "1.68em",
+            "1.7941em", "1.8941em", "2.0074em", "2.0463em", "2.3em", "2.4em", "2.5em",
+            "2.566em", "2.7em", "3em", "3.008em", "3.0344em", "3.05em", "3.5689em", "3.68em",
+            "3.7941em", "3.8941em", "5.6em",
         ],
     ),
     (
         "vertical-align",
         &[
-            "-1.516em", "-1.2777em", "-1.25em", "-.95em", "-.686em", "-.59em", "-.3552em",
-            "-.2861em", "-.2645em", "-.2501em", "-.25em", "-.2083em", "-.1944em", "-.15em",
-            "-.136em", "-.0833em", "-.0391em", "-.011em",
+            "-5.6em", "-4.55em", "-1.516em", "-1.4382em", "-1.4138em", "-1.3861em",
+            "-1.2844em", "-1.2777em", "-1.25em", "-1.1em", "-.95em", "-.8804em", "-.7693em",
+            "-.69em", "-.686em", "-.59em", "-.5344em", "-.4233em", "-.3552em", "-.3473em",
+            "-.2918em", "-.2861em", "-.2819em", "-.2645em", "-.2527em", "-.2501em", "-.25em",
+            "-.2441em", "-.2083em", "-.2025em", "-.1944em", "-.15em", "-.143em", "-.136em",
+            "-.0833em", "-.0391em", "-.011em",
         ],
     ),
     (
@@ -531,7 +905,7 @@ const VALUES: &[(&str, &[&str])] = &[
         &[
             "-.2222em", "-.1389em", "-.109em", "-.1076em", "-.0785em", "-.0715em", "-.0576em",
             "-.0502em", "-.044em", "-.0359em", "-.0315em", "-.0278em", "-.0269em", "-.0077em",
-            "-.0037em", "0",
+            "-.0037em", "0", ".0556em", ".1667em", ".2222em", ".2778em", "2em",
         ],
     ),
     (
@@ -540,7 +914,7 @@ const VALUES: &[(&str, &[&str])] = &[
             "-.1667em", ".0037em", ".0077em", ".0139em", ".0197em", ".0269em", ".0278em",
             ".0315em", ".0359em", ".044em", ".05em", ".0502em", ".0556em", ".0572em",
             ".0576em", ".0714em", ".0715em", ".0785em", ".0813em", ".1076em", ".109em",
-            ".1389em", ".1667em", ".1952em", ".2222em", ".2778em", ".3333em", "1em", "2em",
+            ".1389em", ".1667em", ".2222em", ".2778em", ".3333em", "1em", "2em",
         ],
     ),
     (
@@ -561,8 +935,101 @@ const VALUES: &[(&str, &[&str])] = &[
             ".04em",
         ],
     ),
+    (
+        "padding-top",
+        &[
+            ".1514em", ".1645em", ".207em", ".2806em", ".3011em", ".3117em", ".3173em",
+            ".3175em", ".3281em", ".3283em", ".3361em", ".3448em", ".6828em", ".7144em",
+            ".7401em", ".7519em", ".8019em", ".8141em", ".8413em", ".8491em", ".8641em",
+            ".8913em", ".8991em", ".9191em", ".938em", "1.0064em", "1.0344em", "1.05em",
+            "1.09em", "1.1003em", "1.1081em", "1.2041em", "1.3214em", "1.3603em", "1.7844em",
+            "6.1em",
+        ],
+    ),
 ];
 // VALUES-END
+
+/// Struts (height, vertical-align) and pstruts' heights that have a pseudo-element rule of their
+/// own. Generated from the corpus by `tools/gen_compact_values.py`; the class is the prefix and
+/// the position in base 36.
+// STRUTS-BEGIN
+const STRUTS: &[(&str, &str)] = &[
+    ("1em", "-.25em"),
+    (".6444em", ""),
+    (".8141em", ""),
+    (".8389em", "-.1944em"),
+    (".6833em", ""),
+    (".625em", "-.1944em"),
+    (".6944em", ""),
+    (".5806em", "-.15em"),
+    (".7278em", "-.0833em"),
+    (".4306em", ""),
+    (".8889em", "-.1944em"),
+    (".8333em", "-.15em"),
+    (".7333em", "-.15em"),
+    (".8444em", "-.15em"),
+    (".8778em", "-.1944em"),
+    ("1.0361em", "-.2861em"),
+    (".7778em", "-.1944em"),
+    (".6667em", "-.0833em"),
+    (".7719em", "-.136em"),
+    (".7167em", "-.2861em"),
+    (".6389em", "-.1944em"),
+    (".7917em", "-.2083em"),
+    (".9501em", "-.136em"),
+    ("2.0074em", "-.686em"),
+    (".9694em", "-.2861em"),
+    (".4445em", ""),
+    (".6111em", ""),
+    (".6389em", "-.2083em"),
+    ("1.2503em", "-.15em"),
+    (".8641em", ""),
+    (".8974em", "-.0833em"),
+    (".854em", "-.1944em"),
+    (".7804em", "-.136em"),
+    (".8694em", "-.2861em"),
+    (".8991em", ""),
+    ("1.1413em", "-.25em"),
+    (".8193em", "-.136em"),
+    ("1.0858em", "-.1944em"),
+    ("1.2581em", "-.15em"),
+    (".7667em", "-.0833em"),
+    (".8491em", ""),
+    (".9385em", "-.3552em"),
+    ("2.3em", "-1.25em"),
+    ("2.566em", "-1.516em"),
+    (".8019em", ""),
+    ("2.4em", "-.95em"),
+    (".938em", ""),
+    (".6595em", ""),
+    (".9028em", "-.2083em"),
+    ("1.1113em", "-.011em"),
+    (".8095em", "-.1944em"),
+    ("2.0463em", "-.686em"),
+    (".7335em", "-.1944em"),
+    (".8413em", ""),
+    ("1.2709em", "-.2645em"),
+    (".5945em", "-.15em"),
+    ("1.7941em", "-.59em"),
+    ("1.0413em", "-.15em"),
+    (".7858em", "-.3552em"),
+    (".786em", "-.15em"),
+];
+// STRUTS-END
+// PSTRUTS-BEGIN
+const PSTRUTS: &[(&str, &str)] = &[
+    ("2.7em", ""),
+    ("3em", ""),
+    ("2.5em", ""),
+    ("3.05em", ""),
+    ("3.5689em", ""),
+    ("3.0344em", ""),
+    ("3.7941em", ""),
+    ("3.008em", ""),
+    ("3.68em", ""),
+    ("3.8941em", ""),
+];
+// PSTRUTS-END
 
 /// Orders values as the generator writes them: by number, then by text.
 fn cmp_values(a: &str, b: &str) -> core::cmp::Ordering {
@@ -589,6 +1056,7 @@ fn value_class(prop: &str, value: &str) -> Option<String> {
         "min-width" => 'm',
         "width" => 'w',
         "border-bottom-width" => 'x',
+        "padding-top" => 'q',
         _ => return None,
     };
     let mut name = String::with_capacity(value.len() + 2);
