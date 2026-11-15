@@ -8,7 +8,7 @@ use crate::{
     parse_tree::parse_tree,
     parser::parse_node::AnyParseNode,
     tree::{VirtualNode as _, markup_to_string_with_limit},
-    types::{ParseError, ParseErrorKind, Settings},
+    types::{OutputFormat, ParseError, ParseErrorKind, Settings},
 };
 
 fn render_error(
@@ -65,6 +65,21 @@ pub fn render_to_string(
             }
         }
     }?;
+
+    if settings.output == OutputFormat::CompactHtml {
+        if let Some(markup) = crate::compact::render(&dom_tree, settings) {
+            return match markup {
+                Ok(markup) => Ok(markup),
+                Err(e)
+                    if !settings.throw_on_error
+                        && matches!(*e.kind, ParseErrorKind::OutputTooLarge { .. }) =>
+                {
+                    render_error(e, expression, settings)?.to_markup()
+                }
+                Err(e) => Err(e),
+            };
+        }
+    }
 
     match markup_to_string_with_limit(&dom_tree, settings.max_output_size) {
         Err(e)

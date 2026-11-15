@@ -50,6 +50,14 @@ pub enum OutputFormat {
     /// mathematical software. Best for applications requiring precise
     /// mathematical semantics over visual presentation.
     Mathml,
+    /// Generate HTML markup only, in the compact form of [`crate::compact`].
+    ///
+    /// Renders as KaTeX's HTML output does, but with far fewer and smaller
+    /// elements. It needs the stylesheet from [`crate::compact::stylesheet`]
+    /// instead of KaTeX's `katex.css` (which it contains), and has no MathML:
+    /// the TeX source is in an `aria-label` unless [`Settings::compact_label`]
+    /// is off.
+    CompactHtml,
 }
 
 /// Levels of strictness for LaTeX compatibility checking in KaTeX.
@@ -239,6 +247,12 @@ pub struct Settings {
     /// CSS color value used for rendering mathematical expressions.
     #[cfg_attr(feature = "wasm", wasm_bindgen(getter_with_clone))]
     pub color: Option<String>,
+    /// Bit set of the optimizations [`OutputFormat::CompactHtml`] applies
+    /// (see `crate::compact::levels`); all of them by default.
+    pub compact_levels: u32,
+    /// Whether [`OutputFormat::CompactHtml`] puts the TeX source in an
+    /// `aria-label` on the formula, in place of the MathML.
+    pub compact_label: bool,
 }
 
 /// Builder for [`Settings`], returned by [`Settings::builder`].
@@ -270,6 +284,8 @@ struct SettingsOptional {
     global_group: Option<bool>,
     size_multiplier: Option<f64>,
     color: Option<String>,
+    compact_levels: Option<u32>,
+    compact_label: Option<bool>,
 }
 
 impl SettingsBuilder {
@@ -315,6 +331,10 @@ impl SettingsBuilder {
         size_multiplier / maybe_size_multiplier: f64;
         /// Color for mathematical content.
         color / maybe_color: String;
+        /// Optimizations of the compact output (`crate::compact::levels`).
+        compact_levels / maybe_compact_levels: u32;
+        /// Whether the compact output labels the formula with its TeX source.
+        compact_label / maybe_compact_label: bool;
     }
 
     /// Builds the [`Settings`] from the values set so far.
@@ -372,6 +392,8 @@ impl SettingsBuilder {
             global_group,
             size_multiplier,
             color,
+            compact_levels,
+            compact_label,
         } = self.opt;
         Settings {
             display_mode: display_mode.unwrap_or(false),
@@ -394,6 +416,8 @@ impl SettingsBuilder {
             global_group: global_group.unwrap_or(false),
             size_multiplier: size_multiplier.unwrap_or(1.0),
             color,
+            compact_levels: compact_levels.unwrap_or(crate::compact::levels::ALL),
+            compact_label: compact_label.unwrap_or(true),
         }
     }
 }

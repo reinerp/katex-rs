@@ -234,6 +234,11 @@ impl CssStyle {
         self.entries.is_empty()
     }
 
+    /// The properties and values, in insertion order.
+    pub fn iter(&self) -> impl Iterator<Item = (CssProperty, &str)> {
+        self.entries.iter().map(|(key, value)| (*key, value.as_str()))
+    }
+
     /// Writes the CSS style as a string to the provided formatter.
     #[inline]
     pub fn write_to<W: fmt::Write>(&self, writer: &mut W) -> fmt::Result {

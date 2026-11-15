@@ -87,6 +87,18 @@ pub fn build_tree(
             let html_node = build_html(ctx, tree, &options)?;
             make_span("katex", vec![html_node], None, None)
         }
+        OutputFormat::CompactHtml => {
+            // HTML only; `compact::render` rewrites the tree when it is serialized.
+            let html_node = build_html(ctx, tree, &options)?;
+            let mut katex = make_span("katex", vec![html_node], None, None);
+            if settings.compact_label {
+                katex.attributes.insert("role".to_owned(), "math".to_owned());
+                katex
+                    .attributes
+                    .insert("aria-label".to_owned(), expression.to_owned());
+            }
+            katex
+        }
         OutputFormat::HtmlAndMathml => {
             // Both HTML and MathML
             let mathml_node = build_mathml(
