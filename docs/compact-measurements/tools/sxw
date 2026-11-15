@@ -1,0 +1,4 @@
+#!/bin/bash
+# cargo inside sbx --no-net with the compact workspace writable (tests, Cargo.lock), target dir in scratch.
+cd /home/agents/scratch/katex-compact || exit 1
+exec /home/agents/code/sbx/sbx --no-net --rw /home/agents/workspaces/katex-rs-compact --ro /home/agents/code/katex-rs-vendor --ro /home/agents/scratch/katex-harden --ro /home/agents/scratch/katex-eval/data -- bash -c 'mkdir -p /tmp/ch && cp /home/agents/code/katex-rs-vendor/cargo-config.toml /tmp/ch/config.toml && export CARGO_HOME=/tmp/ch && cd /home/agents/workspaces/katex-rs-compact && cp -n /home/agents/code/katex-rs/Cargo.lock . 2>/dev/null; export CARGO_TARGET_DIR=/home/agents/scratch/katex-compact/target-ws; "$@"' sh "$@"

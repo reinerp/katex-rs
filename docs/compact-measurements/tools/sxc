@@ -1,0 +1,4 @@
+#!/bin/bash
+# Run a command inside sbx --no-net at ~/scratch/katex-compact (Chrome, python tools, node), harden data read-only.
+cd /home/agents/scratch/katex-compact || exit 1
+exec /home/agents/code/sbx/sbx --no-net --ro /opt/google/chrome --ro /home/agents/scratch/katex-harden --ro /home/agents/code/agentserver/scripts --ro /home/agents/code/katex-rs-vendor --ro /home/agents/workspaces/katex-rs-compact --ro /etc/alternatives "$@"

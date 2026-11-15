@@ -1,0 +1,434 @@
+{
+ "0 current fork output (HTML + MathML)": {
+  "mode": "legacy",
+  "corpus": {
+   "n": 1128,
+   "raw": 2348108,
+   "zstd": 69036,
+   "gzip": 95055,
+   "el": 63539,
+   "tx": 23806
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 1132908,
+   "zstd": 40807,
+   "gzip": 51659,
+   "el": 30515,
+   "tx": 11476
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 10090878,
+   "zstd": 69798,
+   "gzip": 410721,
+   "el": 272766,
+   "tx": 102098
+  }
+ },
+ "1 drop the MathML (KaTeX output=html)": {
+  "mode": "html",
+  "corpus": {
+   "n": 1128,
+   "raw": 1894646,
+   "zstd": 36571,
+   "gzip": 51155,
+   "el": 44210,
+   "tx": 11833
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 911056,
+   "zstd": 22251,
+   "gzip": 27939,
+   "el": 21152,
+   "tx": 5677
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 8143870,
+   "zstd": 37211,
+   "gzip": 221105,
+   "el": 189964,
+   "tx": 50775
+  }
+ },
+ "2 compact: katex-html wrapper dropped": {
+  "mode": "compact:1:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 1858582,
+   "zstd": 36439,
+   "gzip": 50843,
+   "el": 43083,
+   "tx": 11833
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 893040,
+   "zstd": 22167,
+   "gzip": 27764,
+   "el": 20589,
+   "tx": 5677
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 7990398,
+   "zstd": 37041,
+   "gzip": 219828,
+   "el": 185168,
+   "tx": 50775
+  }
+ },
+ "3 + unused classes dropped": {
+  "mode": "compact:3:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 1673588,
+   "zstd": 35485,
+   "gzip": 47548,
+   "el": 43083,
+   "tx": 11833
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 805872,
+   "zstd": 21454,
+   "gzip": 26173,
+   "el": 20589,
+   "tx": 5677
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 7194979,
+   "zstd": 36043,
+   "gzip": 205772,
+   "el": 185168,
+   "tx": 50775
+  }
+ },
+ "4 + short class names": {
+  "mode": "compact:7:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 1450401,
+   "zstd": 34745,
+   "gzip": 45073,
+   "el": 43083,
+   "tx": 11833
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 698776,
+   "zstd": 21139,
+   "gzip": 24990,
+   "el": 20589,
+   "tx": 5677
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 6237665,
+   "zstd": 35222,
+   "gzip": 195029,
+   "el": 185168,
+   "tx": 50775
+  }
+ },
+ "5 + shorter numbers": {
+  "mode": "compact:23:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 1418757,
+   "zstd": 34659,
+   "gzip": 44749,
+   "el": 43083,
+   "tx": 11833
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 683489,
+   "zstd": 21033,
+   "gzip": 24797,
+   "el": 20589,
+   "tx": 5677
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 6101959,
+   "zstd": 35148,
+   "gzip": 193611,
+   "el": 185168,
+   "tx": 50775
+  }
+ },
+ "6 + common declarations as classes": {
+  "mode": "compact:31:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 1145466,
+   "zstd": 33475,
+   "gzip": 41579,
+   "el": 43083,
+   "tx": 11833
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 551861,
+   "zstd": 20213,
+   "gzip": 23430,
+   "el": 20589,
+   "tx": 5677
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 4930327,
+   "zstd": 33877,
+   "gzip": 180026,
+   "el": 185168,
+   "tx": 50775
+  }
+ },
+ "7 + vertical lists as inline blocks": {
+  "mode": "compact:543:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 904011,
+   "zstd": 32211,
+   "gzip": 38053,
+   "el": 33551,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 439250,
+   "zstd": 19328,
+   "gzip": 21494,
+   "el": 16125,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 3893052,
+   "zstd": 32523,
+   "gzip": 164529,
+   "el": 144198,
+   "tx": 44366
+  }
+ },
+ "8 + struts and pstruts as pseudo-elements": {
+  "mode": "compact:1567:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 728259,
+   "zstd": 30949,
+   "gzip": 33944,
+   "el": 29277,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 354588,
+   "zstd": 18611,
+   "gzip": 20302,
+   "el": 14070,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 3140639,
+   "zstd": 31207,
+   "gzip": 147595,
+   "el": 125890,
+   "tx": 44366
+  }
+ },
+ "9 + one element for a one-item list": {
+  "mode": "compact:5663:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 692801,
+   "zstd": 30695,
+   "gzip": 33715,
+   "el": 27700,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 337992,
+   "zstd": 18454,
+   "gzip": 20093,
+   "el": 13332,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2989462,
+   "zstd": 30946,
+   "gzip": 146623,
+   "el": 119166,
+   "tx": 44366
+  }
+ },
+ "10 + group classes (= levels::EXACT)": {
+  "mode": "compact:22047:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 676020,
+   "zstd": 30822,
+   "gzip": 33372,
+   "el": 27700,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 330218,
+   "zstd": 18504,
+   "gzip": 19953,
+   "el": 13332,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2917869,
+   "zstd": 31075,
+   "gzip": 145121,
+   "el": 119166,
+   "tx": 44366
+  }
+ },
+ "11 + spacing as margins": {
+  "mode": "compact:22079:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 613407,
+   "zstd": 31072,
+   "gzip": 33969,
+   "el": 23791,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 299019,
+   "zstd": 18760,
+   "gzip": 19804,
+   "el": 11388,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2649848,
+   "zstd": 31301,
+   "gzip": 147890,
+   "el": 102431,
+   "tx": 44366
+  }
+ },
+ "12 + msupsub and size spans merged": {
+  "mode": "compact:30399:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 562182,
+   "zstd": 30714,
+   "gzip": 32882,
+   "el": 21074,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 274521,
+   "zstd": 18506,
+   "gzip": 19530,
+   "el": 10082,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2430928,
+   "zstd": 30882,
+   "gzip": 143310,
+   "el": 90831,
+   "tx": 44366
+  }
+ },
+ "13 + grouping spans removed": {
+  "mode": "compact:30463:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 519997,
+   "zstd": 29135,
+   "gzip": 31325,
+   "el": 18262,
+   "tx": 10342
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 254836,
+   "zstd": 17682,
+   "gzip": 18222,
+   "el": 8779,
+   "tx": 4978
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2248580,
+   "zstd": 29325,
+   "gzip": 136594,
+   "el": 78669,
+   "tx": 44366
+  }
+ },
+ "14 + text runs joined (= levels::ALL)": {
+  "mode": "compact:32767:nolabel",
+  "corpus": {
+   "n": 1128,
+   "raw": 491855,
+   "zstd": 27872,
+   "gzip": 30052,
+   "el": 15378,
+   "tx": 8930
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 242795,
+   "zstd": 16875,
+   "gzip": 17481,
+   "el": 7463,
+   "tx": 4324
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2128601,
+   "zstd": 28052,
+   "gzip": 130980,
+   "el": 66344,
+   "tx": 38353
+  }
+ },
+ "15 ALL + aria-label with the TeX": {
+  "mode": "compact:32767",
+  "corpus": {
+   "n": 1128,
+   "raw": 528116,
+   "zstd": 40171,
+   "gzip": 43312,
+   "el": 15378,
+   "tx": 8930
+  },
+  "heldout": {
+   "n": 564,
+   "raw": 260782,
+   "zstd": 23816,
+   "gzip": 24678,
+   "el": 7463,
+   "tx": 4324
+  },
+  "fixture": {
+   "n": 4800,
+   "raw": 2286302,
+   "zstd": 40314,
+   "gzip": 188733,
+   "el": 66344,
+   "tx": 38353
+  }
+ }
+}

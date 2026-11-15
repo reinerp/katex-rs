@@ -1,0 +1,1 @@
+{"mode": "compact::nolabel:p2", "corpus": {"n": 1128, "raw": 490237, "zstd": 27758, "gzip": 29653, "el": 15378, "tx": 8930}, "heldout": {"n": 564, "raw": 241837, "zstd": 16731, "gzip": 17236, "el": 7463, "tx": 4324}, "fixture": {"n": 4800, "raw": 2121390, "zstd": 27937, "gzip": 129229, "el": 66344, "tx": 38353}}

@@ -1,0 +1,4 @@
+#!/bin/bash
+# cargo/rust inside sbx --no-net at ~/scratch/katex-compact with the vendored sources; the workspace is read-only.
+cd /home/agents/scratch/katex-compact || exit 1
+exec /home/agents/code/sbx/sbx --no-net --ro /home/agents/workspaces/katex-rs-compact --ro /home/agents/code/katex-rs-vendor --ro /home/agents/scratch/katex-harden --ro /home/agents/scratch/katex-eval/data -- bash -c 'mkdir -p /tmp/ch && cp /home/agents/code/katex-rs-vendor/cargo-config.toml /tmp/ch/config.toml && export CARGO_HOME=/tmp/ch && "$@"' sh "$@"

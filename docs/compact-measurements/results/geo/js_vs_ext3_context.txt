@@ -1,0 +1,3 @@
+paragraph height   differing   71 / 1128  max 0.1094 px  p99 0.0781  median 0.0000
+baseline y         differing   56 / 1128  max 0.1094 px  p99 0.0781  median 0.0000
+katex box          differing   62 / 1128  max 0.1094 px  p99 0.0781  median 0.0000

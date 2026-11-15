@@ -284,3 +284,35 @@ fn deeply_nested_input_renders() {
     let out = compact(&nested, false, levels::ALL, true);
     assert!(out.starts_with("<span class=\"katex\""), "{out}");
 }
+
+/// Rewriting the tree is recursive but bounded: the deepest formula the nesting limit allows
+/// renders on a stack of a size the hardened renderer is known to need, also in compact form.
+#[test]
+fn deepest_allowed_formula_fits_the_workers_stack() {
+    let stack = if cfg!(debug_assertions) {
+        16 << 20
+    } else {
+        1 << 20
+    };
+    let result = std::thread::Builder::new()
+        .stack_size(stack)
+        .spawn(|| {
+            let ctx = KatexContext::default();
+            let tex = format!("{}x{}", r"\overset{a}{".repeat(15), "}".repeat(15));
+            let settings = |output| {
+                Settings::builder()
+                    .output(output)
+                    .throw_on_error(false)
+                    .build()
+            };
+            let html =
+                render_to_string(&ctx, &tex, &settings(OutputFormat::HtmlAndMathml)).expect("html");
+            let compact = render_to_string(&ctx, &tex, &settings(OutputFormat::CompactHtml))
+                .expect("compact");
+            (html.len(), compact.len())
+        })
+        .expect("spawn")
+        .join();
+    let (html, compact) = result.expect("rendered without overflowing the stack");
+    assert!(compact < html);
+}

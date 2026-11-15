@@ -1,0 +1,4 @@
+fxI vs jsI dpr 1: differing formulas 0 / 1128, differing pixels 0
+fxD vs jsD dpr 1: differing formulas 0 / 1128, differing pixels 0
+fxI vs jsI dpr 2: differing formulas 0 / 1128, differing pixels 0
+fxD vs jsD dpr 2: differing formulas 0 / 1128, differing pixels 0

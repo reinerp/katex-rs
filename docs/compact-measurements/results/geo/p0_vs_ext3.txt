@@ -1,0 +1,5 @@
+formulas compared 1128 (char count mismatch 0), glyphs 13592
+glyph shift (px, base 16px): nonzero 2542  median 0.00000  p99 0.10938  max 0.20312   (em of .katex: p99 0.00565 max 0.01049; device px @2x: p99 0.2188 max 0.4062)
+per-formula max shift: median 0.00000  p99 0.15625  max 0.20312  formulas with shift > 0.25 css px: 0
+formula width change (px): median 0.00000 p99 0.00000 max 0.06250
+mean glyph shift by x position (150px bins): 0:0.0095 150:0.0127 300:0.0081 450:0.0097 600:0.0142

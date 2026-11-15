@@ -1,0 +1,7 @@
+q4I vs jsI dpr 1: differing formulas 0 / 1128, differing pixels 0
+q4D vs jsD dpr 1: differing formulas 1 / 1128, differing pixels 238
+ids 4
+q4I vs jsI dpr 2: differing formulas 14 / 1128, differing pixels 6583
+ids 22 58 109 153 154 155 156 160 161 163 223 291 796 816
+q4D vs jsD dpr 2: differing formulas 19 / 1128, differing pixels 8973
+ids 4 12 22 55 58 61 109 153 154 155 156 160 161 163 223 232 291 796 816
