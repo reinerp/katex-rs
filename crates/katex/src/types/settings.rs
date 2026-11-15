@@ -253,6 +253,9 @@ pub struct Settings {
     /// Whether [`OutputFormat::CompactHtml`] puts the TeX source in an
     /// `aria-label` on the formula, in place of the MathML.
     pub compact_label: bool,
+    /// Significant figures of the `em` numbers [`OutputFormat::CompactHtml`] writes (0 for
+    /// all the digits KaTeX computes, which is four decimals).
+    pub compact_precision: u32,
 }
 
 /// Builder for [`Settings`], returned by [`Settings::builder`].
@@ -286,6 +289,7 @@ struct SettingsOptional {
     color: Option<String>,
     compact_levels: Option<u32>,
     compact_label: Option<bool>,
+    compact_precision: Option<u32>,
 }
 
 impl SettingsBuilder {
@@ -335,6 +339,8 @@ impl SettingsBuilder {
         compact_levels / maybe_compact_levels: u32;
         /// Whether the compact output labels the formula with its TeX source.
         compact_label / maybe_compact_label: bool;
+        /// Significant figures of the compact output's `em` numbers (0: exact).
+        compact_precision / maybe_compact_precision: u32;
     }
 
     /// Builds the [`Settings`] from the values set so far.
@@ -394,6 +400,7 @@ impl SettingsBuilder {
             color,
             compact_levels,
             compact_label,
+            compact_precision,
         } = self.opt;
         Settings {
             display_mode: display_mode.unwrap_or(false),
@@ -418,6 +425,7 @@ impl SettingsBuilder {
             color,
             compact_levels: compact_levels.unwrap_or(crate::compact::levels::ALL),
             compact_label: compact_label.unwrap_or(true),
+            compact_precision: compact_precision.unwrap_or(crate::compact::DEFAULT_PRECISION),
         }
     }
 }

@@ -13,10 +13,13 @@
 //! [`MAX_DEPTH`] are written as ordinary KaTeX markup instead, which the stylesheet also covers.
 
 use core::fmt::Write as _;
+use core::mem;
 
 use crate::ParseError;
 use crate::dom_tree::{DomSpan, HtmlDomNode, SvgChildNode};
+use crate::svg_geometry::PATH_MAP;
 use crate::types::{ParseErrorKind, Settings};
+use crate::units::make_em;
 use crate::utils::escape_into;
 
 /// Bits of [`Settings::compact_levels`].
@@ -29,7 +32,7 @@ pub mod levels {
     pub const SHORT_NAMES: u32 = 1 << 2;
     /// Replace common inline `style` declarations with classes.
     pub const VALUE_CLASSES: u32 = 1 << 3;
-    /// Shorten numbers (`0.5em` to `.5em`).
+    /// Shorten numbers (`0.5em` to `.5em`) and leave out the last `;` of a `style`.
     pub const NUM_TRIM: u32 = 1 << 4;
     /// Turn empty spacing spans into margins of their neighbours.
     pub const GLUE: u32 = 1 << 5;
@@ -43,8 +46,9 @@ pub mod levels {
     pub const VLIST: u32 = 1 << 9;
     /// Replace the struts' elements with pseudo-elements.
     pub const PSEUDO: u32 = 1 << 10;
-    /// Also remove wrappers that hold only text, which then sits in its parent's text run. Glyphs
-    /// are then placed by the sum of unrounded advances and not by sums of layout units that
+    /// Also remove wrappers that hold only text, which then sits in its parent's text run.
+    ///
+    /// Glyphs are then placed by the sum of unrounded advances and not by sums of layout units that
     /// are rounded per element, so one in a few hundred glyphs lands a pixel away.
     pub const UNWRAP_TEXT: u32 = 1 << 11;
     /// A vertical list of one item is one element, not two.
@@ -56,9 +60,22 @@ pub mod levels {
     pub const COMBO: u32 = 1 << 14;
     /// Every step.
     pub const ALL: u32 = (1 << 15) - 1;
-    /// Every step that keeps the pixels exactly as KaTeX's.
-    pub const EXACT: u32 = ALL & !(UNWRAP_TEXT | TEXT);
+    /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
+    ///
+    /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
+    /// widths are rounded unless this is on. Not part of [`ALL`].
+    pub const ROUND_EXTENTS: u32 = 1 << 15;
+    /// The steps after which every formula of the test corpus is drawn with the very same pixels
+    /// as KaTeX's, at scale 1 and 2.
+    ///
+    /// The others (spacing as margins, removing wrappers, joining
+    /// text) leave every glyph where it was to 1/64 px but let about one formula in twenty
+    /// anti-alias a glyph differently at scale 2.
+    pub const EXACT: u32 = ALL & !(UNWRAP_TEXT | TEXT | UNWRAP | GLUE | MERGE | MERGE_CONTENT);
 }
+
+/// The default [`Settings::compact_precision`].
+pub const DEFAULT_PRECISION: u32 = 0;
 
 /// Trees deeper than this are not rewritten.
 const MAX_DEPTH: usize = 512;
@@ -119,7 +136,7 @@ impl El {
 }
 
 /// Converts a tree; `None` if it is nested too deeply or holds a node this module does not know.
-fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
+fn convert(node: &HtmlDomNode, depth: usize, sf: Rounding) -> Option<Node> {
     if depth > MAX_DEPTH {
         return None;
     }
@@ -127,7 +144,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
         HtmlDomNode::DomSpan(span) => {
             let mut kids = Vec::with_capacity(span.children.len());
             for child in &span.children {
-                push_node(&mut kids, convert(child, depth + 1)?);
+                push_node(&mut kids, convert(child, depth + 1, sf)?);
             }
             Node::El(El {
                 tag: Tag::Span,
@@ -135,7 +152,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
                 style: span
                     .style
                     .iter()
-                    .map(|(p, v)| (p.as_str(), v.to_owned()))
+                    .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
                     .collect(),
                 attrs: span
                     .attributes
@@ -148,7 +165,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
         HtmlDomNode::Anchor(anchor) => {
             let mut kids = Vec::with_capacity(anchor.children.len());
             for child in &anchor.children {
-                push_node(&mut kids, convert(child, depth + 1)?);
+                push_node(&mut kids, convert(child, depth + 1, sf)?);
             }
             Node::El(El {
                 tag: Tag::A,
@@ -156,7 +173,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
                 style: anchor
                     .style
                     .iter()
-                    .map(|(p, v)| (p.as_str(), v.to_owned()))
+                    .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
                     .collect(),
                 attrs: anchor
                     .attributes
@@ -172,7 +189,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
             style: img
                 .style
                 .iter()
-                .map(|(p, v)| (p.as_str(), v.to_owned()))
+                .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
                 .collect(),
             attrs: vec![
                 ("src".to_owned(), img.src.clone()),
@@ -188,9 +205,17 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
             }
             let mut style = Vec::new();
             if symbol.italic > 0.0 {
-                style.push(("margin-right", crate::units::make_em(symbol.italic)));
+                style.push((
+                    "margin-right",
+                    sf.apply("margin-right", &make_em(symbol.italic)),
+                ));
             }
-            style.extend(symbol.style.iter().map(|(p, v)| (p.as_str(), v.to_owned())));
+            style.extend(
+                symbol
+                    .style
+                    .iter()
+                    .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v))),
+            );
             Node::El(El {
                 tag: Tag::Span,
                 classes: symbol.classes.iter().map(str::to_owned).collect(),
@@ -205,7 +230,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
                 match child {
                     SvgChildNode::Path(path) => {
                         let d = path.alternate.clone().unwrap_or_else(|| {
-                            crate::svg_geometry::PATH_MAP
+                            PATH_MAP
                                 .get(&path.path_name)
                                 .map_or_else(String::new, |s| (*s).to_owned())
                         });
@@ -230,10 +255,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
                     })),
                 }
             }
-            let mut attrs = vec![(
-                "xmlns".to_owned(),
-                "http://www.w3.org/2000/svg".to_owned(),
-            )];
+            let mut attrs = vec![("xmlns".to_owned(), "http://www.w3.org/2000/svg".to_owned())];
             attrs.extend(svg.attributes.iter().map(|(k, v)| (k.clone(), v.clone())));
             Node::El(El {
                 tag: Tag::Svg,
@@ -247,7 +269,7 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
             // A fragment has no element of its own: splice its children in.
             let mut kids = Vec::with_capacity(fragment.children.len());
             for child in &fragment.children {
-                push_node(&mut kids, convert(child, depth + 1)?);
+                push_node(&mut kids, convert(child, depth + 1, sf)?);
             }
             Node::El(El {
                 tag: Tag::Span,
@@ -259,6 +281,52 @@ fn convert(node: &HtmlDomNode, depth: usize) -> Option<Node> {
         }
         HtmlDomNode::MathML(_) => return None,
     })
+}
+
+/// How numbers are rounded: to `sf` significant figures (0 for not at all), for the properties
+/// that do not set how tall a formula is unless `extents`.
+#[derive(Clone, Copy)]
+struct Rounding {
+    sf: u32,
+    extents: bool,
+}
+
+impl Rounding {
+    fn apply(self, prop: &str, value: &str) -> String {
+        if !self.extents && matches!(prop, "height" | "padding-top" | "vertical-align") {
+            return value.to_owned();
+        }
+        round_sig(value, self.sf)
+    }
+}
+
+/// An `em` value with at most `sf` significant figures (all of them if `sf` is 0). A value that
+/// is not a plain number of ems is kept; a non-zero one stays non-zero.
+fn round_sig(value: &str, sf: u32) -> String {
+    if sf == 0 {
+        return value.to_owned();
+    }
+    let Some(number) = value.strip_suffix("em") else {
+        return value.to_owned();
+    };
+    let plain = !number.is_empty()
+        && number
+            .bytes()
+            .enumerate()
+            .all(|(i, b)| b.is_ascii_digit() || b == b'.' || (i == 0 && b == b'-'));
+    let Ok(x) = number.parse::<f64>() else {
+        return value.to_owned();
+    };
+    if !plain || x == 0.0 || !x.is_finite() {
+        return value.to_owned();
+    }
+    let rounded = format!("{:.*e}", (sf - 1) as usize, x)
+        .parse::<f64>()
+        .unwrap_or(x);
+    // Four decimals is as fine as `make_em` writes, so a rounded value is written in full.
+    let text = format!("{rounded:.6}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    format!("{text}em")
 }
 
 /// Appends `node` to `kids`, splicing in a fragment's children.
@@ -278,17 +346,35 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     if !is_katex {
         return None;
     }
-    let Node::El(mut el) = convert(&HtmlDomNode::DomSpan(root.clone()), 0)? else {
+    let Node::El(mut el) = convert(
+        &HtmlDomNode::DomSpan(root.clone()),
+        0,
+        Rounding {
+            sf: settings.compact_precision,
+            extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
+        },
+    )?
+    else {
         return None;
     };
     rewrite(&mut el, settings);
     let mut out = String::new();
-    write_el(&mut out, &el, settings.compact_levels, settings.max_output_size)
-        .map(|()| out)
-        .map_or_else(
-            |()| Some(Err(ParseErrorKind::OutputTooLarge { max: settings.max_output_size }.into())),
-            |out| Some(Ok(out)),
-        )
+    write_el(
+        &mut out,
+        &el,
+        settings.compact_levels,
+        settings.max_output_size,
+    )
+    .map(|()| out)
+    .map_or_else(
+        |()| {
+            Some(Err(ParseErrorKind::OutputTooLarge {
+                max: settings.max_output_size,
+            }
+            .into()))
+        },
+        |out| Some(Ok(out)),
+    )
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -296,10 +382,34 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
 
 /// Class names that only set (inherited) font properties.
 const FONT: &[&str] = &[
-    "mathnormal", "mathit", "mathrm", "mathbf", "boldsymbol", "amsrm", "mathbb", "textbb", "mathcal",
-    "mathfrak", "textfrak", "mathboldfrak", "textboldfrak", "mathtt", "mathscr", "textscr", "mathsf",
-    "textsf", "mathboldsf", "textboldsf", "mathsfit", "mathitsf", "textitsf", "mainrm", "textbf",
-    "textit", "textrm", "texttt",
+    "mathnormal",
+    "mathit",
+    "mathrm",
+    "mathbf",
+    "boldsymbol",
+    "amsrm",
+    "mathbb",
+    "textbb",
+    "mathcal",
+    "mathfrak",
+    "textfrak",
+    "mathboldfrak",
+    "textboldfrak",
+    "mathtt",
+    "mathscr",
+    "textscr",
+    "mathsf",
+    "textsf",
+    "mathboldsf",
+    "textboldsf",
+    "mathsfit",
+    "mathitsf",
+    "textitsf",
+    "mainrm",
+    "textbf",
+    "textit",
+    "textrm",
+    "texttt",
 ];
 
 fn is_size_class(c: &str) -> bool {
@@ -358,13 +468,22 @@ fn rewrite(root: &mut El, settings: &Settings) {
     if levels & levels::DEAD_CLASSES != 0 {
         strip_dead(root);
     }
-    if levels & (levels::UNWRAP | levels::VLIST | levels::PSEUDO | levels::GLUE | levels::MERGE | levels::TEXT) != 0 {
+    if levels
+        & (levels::UNWRAP
+            | levels::VLIST
+            | levels::PSEUDO
+            | levels::GLUE
+            | levels::MERGE
+            | levels::TEXT)
+        != 0
+    {
         walk(root, Role::Normal, levels);
     }
 }
 
 fn strip_dead(el: &mut El) {
-    el.classes.retain(|c| !DEAD.contains(&c.as_str()) || c == "katex-error");
+    el.classes
+        .retain(|c| !DEAD.contains(&c.as_str()) || c == "katex-error");
     for kid in &mut el.kids {
         if let Node::El(child) = kid {
             strip_dead(child);
@@ -384,10 +503,10 @@ fn walk(el: &mut El, role: Role, levels: u32) {
     };
     if levels & levels::VLIST != 0 && kid_role == Role::Normal {
         for kid in &mut el.kids {
-            if let Node::El(child) = kid {
-                if child.has("vlist-t") {
-                    to_inline_block(child);
-                }
+            if let Node::El(child) = kid
+                && child.has("vlist-t")
+            {
+                to_inline_block(child);
             }
         }
     }
@@ -418,7 +537,7 @@ fn walk(el: &mut El, role: Role, levels: u32) {
         }
     }
     if plain && levels & levels::UNWRAP != 0 {
-        let kids = core::mem::take(&mut el.kids);
+        let kids = mem::take(&mut el.kids);
         for kid in kids {
             match kid {
                 Node::El(child)
@@ -435,17 +554,18 @@ fn walk(el: &mut El, role: Role, levels: u32) {
     }
     if plain && levels & levels::MERGE != 0 {
         for kid in &mut el.kids {
-            if let Node::El(child) = kid {
-                if child.has("msupsub")
-                    && child.style.is_empty()
-                    && child.kids.len() == 1
-                    && matches!(&child.kids[0], Node::El(c) if c.has("X") || c.has("Y"))
-                {
-                    let Some(Node::El(mut inner)) = child.kids.pop() else { continue };
-                    inner.classes.push("msupsub".to_owned());
-                    child.classes.clear();
-                    *kid = Node::El(inner);
-                }
+            if let Node::El(child) = kid
+                && child.has("msupsub")
+                && child.style.is_empty()
+                && child.kids.len() == 1
+                && matches!(&child.kids[0], Node::El(c) if c.has("X") || c.has("Y"))
+            {
+                let Some(Node::El(mut inner)) = child.kids.pop() else {
+                    continue;
+                };
+                inner.classes.push("msupsub".to_owned());
+                child.classes.clear();
+                *kid = Node::El(inner);
             }
         }
     }
@@ -464,21 +584,34 @@ fn walk(el: &mut El, role: Role, levels: u32) {
 /// margins, the item is drawn at the same place and takes the same room; the `X` gets an
 /// explicit `height` since its content is no longer a zero-height block.
 fn merge_item(x: &mut El) {
-    let [Node::El(wrapper)] = x.kids.as_mut_slice() else { return };
+    let [Node::El(wrapper)] = x.kids.as_mut_slice() else {
+        return;
+    };
     if !(wrapper.tag == Tag::Span
         && wrapper.attrs.is_empty()
         && wrapper.classes.len() == 2
         && wrapper.classes[0] == "W"
         && wrapper.classes[1].starts_with('k')
-        && wrapper.style.iter().all(|(p, _)| matches!(*p, "top" | "margin-left" | "margin-right"))
+        && wrapper
+            .style
+            .iter()
+            .all(|(p, _)| matches!(*p, "top" | "margin-left" | "margin-right"))
         && x.attrs.is_empty()
-        && x.style.iter().all(|(p, _)| matches!(*p, "padding-top" | "height" | "vertical-align")))
+        && x.style
+            .iter()
+            .all(|(p, _)| matches!(*p, "padding-top" | "height" | "vertical-align")))
     {
         return;
     }
-    let mut wrapper = core::mem::replace(
+    let mut wrapper = mem::replace(
         wrapper,
-        El { tag: Tag::Span, classes: Vec::new(), style: Vec::new(), attrs: Vec::new(), kids: Vec::new() },
+        El {
+            tag: Tag::Span,
+            classes: Vec::new(),
+            style: Vec::new(),
+            attrs: Vec::new(),
+            kids: Vec::new(),
+        },
     );
     if x.get_style("height").is_none() {
         x.style.push(("height", "0".to_owned()));
@@ -499,22 +632,36 @@ fn merge_content(content: &mut El) {
         && content.style.is_empty()
         && content.attrs.is_empty()
         && !content.classes.is_empty()
-        && content.classes.iter().all(|c| is_size_class(c) || DEAD.contains(&c.as_str())))
+        && content
+            .classes
+            .iter()
+            .all(|c| is_size_class(c) || DEAD.contains(&c.as_str())))
     {
         return;
     }
-    let [Node::El(inner)] = content.kids.as_mut_slice() else { return };
+    let [Node::El(inner)] = content.kids.as_mut_slice() else {
+        return;
+    };
     if !(inner.tag == Tag::Span
         && text_only(inner)
         && inner.attrs.is_empty()
-        && inner.classes.iter().all(|c| FONT.contains(&c.as_str()) || DEAD.contains(&c.as_str()))
+        && inner
+            .classes
+            .iter()
+            .all(|c| FONT.contains(&c.as_str()) || DEAD.contains(&c.as_str()))
         && inner.style.iter().all(|(p, _)| *p == "margin-right"))
     {
         return;
     }
-    let inner = core::mem::replace(
+    let inner = mem::replace(
         inner,
-        El { tag: Tag::Span, classes: Vec::new(), style: Vec::new(), attrs: Vec::new(), kids: Vec::new() },
+        El {
+            tag: Tag::Span,
+            classes: Vec::new(),
+            style: Vec::new(),
+            attrs: Vec::new(),
+            kids: Vec::new(),
+        },
     );
     content.classes.extend(inner.classes);
     content.style = inner.style;
@@ -523,7 +670,7 @@ fn merge_content(content: &mut El) {
 
 fn merge_adjacent_text(kids: &mut Vec<Node>) {
     let mut out: Vec<Node> = Vec::with_capacity(kids.len());
-    for kid in core::mem::take(kids) {
+    for kid in mem::take(kids) {
         match (out.last_mut(), kid) {
             (Some(Node::Text(a)), Node::Text(b)) => a.push_str(&b),
             (_, kid) => out.push(kid),
@@ -578,7 +725,7 @@ fn fold_glue(kids: &mut Vec<Node>) {
 /// `margin-right` may be on the last one only.
 fn merge_text(kids: &mut Vec<Node>) {
     let mut out: Vec<Node> = Vec::with_capacity(kids.len());
-    for kid in core::mem::take(kids) {
+    for kid in mem::take(kids) {
         let mergeable = match (out.last(), &kid) {
             (Some(Node::El(a)), Node::El(b)) => {
                 text_only(a)
@@ -591,10 +738,10 @@ fn merge_text(kids: &mut Vec<Node>) {
                     && a.get_style("margin-right").is_none()
                     && a.get_style("margin-left").is_none()
                     && b.get_style("margin-left").is_none()
-                    && a.style.iter().filter(|(p, _)| *p != "margin-right").eq(b
-                        .style
+                    && a.style
                         .iter()
-                        .filter(|(p, _)| *p != "margin-right"))
+                        .filter(|(p, _)| *p != "margin-right")
+                        .eq(b.style.iter().filter(|(p, _)| *p != "margin-right"))
             }
             _ => false,
         };
@@ -633,7 +780,10 @@ fn to_inline_block(table: &mut El) {
         || !(1..=2).contains(&rows.len())
         || !table.style.is_empty()
         || !table.attrs.is_empty()
-        || !table.classes.iter().all(|c| matches!(c.as_str(), "vlist-t" | "vlist-t2"))
+        || !table
+            .classes
+            .iter()
+            .all(|c| matches!(c.as_str(), "vlist-t" | "vlist-t2"))
     {
         return;
     }
@@ -679,7 +829,9 @@ fn to_inline_block(table: &mut El) {
     let mut style = vec![("padding-top", h)];
     if let Some(d) = d {
         // Lowered by its own height, so that the first row's bottom is on the baseline.
-        let lowered = d.strip_prefix('-').map_or_else(|| format!("-{d}"), str::to_owned);
+        let lowered = d
+            .strip_prefix('-')
+            .map_or_else(|| format!("-{d}"), str::to_owned);
         style.push(("height", d));
         style.push(("vertical-align", lowered));
     }
@@ -691,12 +843,23 @@ fn to_inline_block(table: &mut El) {
 /// A pstrut is an inline-block as tall as `height` and no wide, first in the wrapper: its
 /// `::before` is the same box.
 fn pstrut_to_pseudo(wrapper: &mut El) {
-    let Some(Node::El(first)) = wrapper.kids.first() else { return };
-    if !(first.has("pstrut") && first.classes.len() == 1 && first.kids.is_empty() && first.attrs.is_empty() && first.style.len() == 1) {
+    let Some(Node::El(first)) = wrapper.kids.first() else {
+        return;
+    };
+    if !(first.has("pstrut")
+        && first.classes.len() == 1
+        && first.kids.is_empty()
+        && first.attrs.is_empty()
+        && first.style.len() == 1)
+    {
         return;
     }
-    let Some(height) = first.get_style("height") else { return };
-    let Some(class) = pseudo_class(PSTRUTS, "k", height, "") else { return };
+    let Some(height) = first.get_style("height") else {
+        return;
+    };
+    let Some(class) = pseudo_class(PSTRUTS, "k", height, "") else {
+        return;
+    };
     wrapper.classes.push("W".to_owned());
     wrapper.classes.push(class);
     wrapper.kids.remove(0);
@@ -704,8 +867,14 @@ fn pstrut_to_pseudo(wrapper: &mut El) {
 
 /// A strut is an inline-block of the formula's height, first in its base: its `::before`.
 fn strut_to_pseudo(base: &mut El) {
-    let Some(Node::El(first)) = base.kids.first() else { return };
-    if !(first.has("katex-strut") && first.classes.len() == 1 && first.kids.is_empty() && first.attrs.is_empty()) {
+    let Some(Node::El(first)) = base.kids.first() else {
+        return;
+    };
+    if !(first.has("katex-strut")
+        && first.classes.len() == 1
+        && first.kids.is_empty()
+        && first.attrs.is_empty())
+    {
         return;
     }
     let mut height = None;
@@ -718,7 +887,9 @@ fn strut_to_pseudo(base: &mut El) {
         }
     }
     let Some(height) = height else { return };
-    let Some(class) = pseudo_class(STRUTS, "u", height, align) else { return };
+    let Some(class) = pseudo_class(STRUTS, "u", height, align) else {
+        return;
+    };
     base.classes.push(class);
     base.kids.remove(0);
 }
@@ -727,7 +898,9 @@ fn strut_to_pseudo(base: &mut El) {
 fn pseudo_class(table: &[(&str, &str)], prefix: &str, height: &str, align: &str) -> Option<String> {
     let height = trim_number(height);
     let align = trim_number(align);
-    let i = table.iter().position(|(h, a)| *h == height && *a == align)?;
+    let i = table
+        .iter()
+        .position(|(h, a)| *h == height && *a == align)?;
     Some(format!("{prefix}{}", base36(i)))
 }
 
@@ -763,7 +936,7 @@ fn unwrap_html(root: &mut El, labelled: bool) {
     let Some(katex) = katex_mut(root) else { return };
     let mut kids = Vec::with_capacity(katex.kids.len());
     let mut hidden = false;
-    for kid in core::mem::take(&mut katex.kids) {
+    for kid in mem::take(&mut katex.kids) {
         match kid {
             Node::El(wrapper) if wrapper.classes == ["katex-html"] && wrapper.style.is_empty() => {
                 hidden |= wrapper.attrs.iter().any(|(k, _)| k == "aria-hidden");
@@ -774,7 +947,9 @@ fn unwrap_html(root: &mut El, labelled: bool) {
     }
     katex.kids = kids;
     if hidden && !labelled {
-        katex.attrs.push(("aria-hidden".to_owned(), "true".to_owned()));
+        katex
+            .attrs
+            .push(("aria-hidden".to_owned(), "true".to_owned()));
     }
 }
 
@@ -783,8 +958,18 @@ fn unwrap_html(root: &mut El, labelled: bool) {
 
 /// Class names that no rule in `katex.css` mentions.
 const DEAD: &[&str] = &[
-    "mord", "mbin", "mrel", "mopen", "mclose", "mpunct", "minner", "mop", "mtight", "text",
-    "allowbreak", "nobreak",
+    "mord",
+    "mbin",
+    "mrel",
+    "mopen",
+    "mclose",
+    "mpunct",
+    "minner",
+    "mop",
+    "mtight",
+    "text",
+    "allowbreak",
+    "nobreak",
 ];
 
 /// Short names for KaTeX's frequent classes; `katex.css` is aliased to them by the generator.
@@ -806,7 +991,10 @@ const SHORT: &[(&str, &str)] = &[
 // SHORT-END
 
 fn short(class: &str) -> Option<&'static str> {
-    SHORT.iter().find(|(long, _)| *long == class).map(|(_, s)| *s)
+    SHORT
+        .iter()
+        .find(|(long, _)| *long == class)
+        .map(|(_, s)| *s)
 }
 
 /// `katex-sizing reset-sizeA sizeB` as one class, `F` followed by the two sizes in base 12.
@@ -823,7 +1011,9 @@ fn sizing_class(classes: &[String]) -> Option<String> {
             size = n.parse::<u32>().ok().filter(|n| (1..=11).contains(n));
         }
     }
-    let (true, Some(r), Some(s)) = (sizing, reset, size) else { return None };
+    let (true, Some(r), Some(s)) = (sizing, reset, size) else {
+        return None;
+    };
     let digit = |n: u32| char::from_digit(n, 12).unwrap_or('0');
     Some(format!("F{}{}", digit(r), digit(s)))
 }
@@ -832,7 +1022,11 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
     out.push('<');
     out.push_str(el.tag.name());
     let mut classes: Vec<String> = Vec::new();
-    let sizing = if levels & levels::SHORT_NAMES != 0 { sizing_class(&el.classes) } else { None };
+    let sizing = if levels & levels::SHORT_NAMES != 0 {
+        sizing_class(&el.classes)
+    } else {
+        None
+    };
     if let Some(c) = &sizing {
         classes.push(c.clone());
     }
@@ -843,18 +1037,27 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
         if levels & levels::DEAD_CLASSES != 0 && DEAD.contains(&c.as_str()) {
             continue;
         }
-        if levels & levels::SHORT_NAMES != 0 {
-            if let Some(s) = short(c) {
-                classes.push(s.to_owned());
-                continue;
-            }
+        if levels & levels::SHORT_NAMES != 0
+            && let Some(s) = short(c)
+        {
+            classes.push(s.to_owned());
+            continue;
         }
         classes.push(c.clone());
     }
     let mut decls: Vec<(&str, String)> = el
         .style
         .iter()
-        .map(|(p, v)| (*p, if levels & levels::NUM_TRIM != 0 { trim_number(v) } else { v.clone() }))
+        .map(|(p, v)| {
+            (
+                *p,
+                if levels & levels::NUM_TRIM != 0 {
+                    trim_number(v)
+                } else {
+                    v.clone()
+                },
+            )
+        })
         .collect();
     if levels & levels::COMBO != 0 {
         for (group, table, prefix) in [(GEOM_PROPS, GEOMS, 'g'), (ITEM_PROPS, ITEMS, 'i')] {
@@ -865,11 +1068,11 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
     }
     let mut inline: Vec<(&str, String)> = Vec::new();
     for (prop, value) in decls {
-        if levels & levels::VALUE_CLASSES != 0 {
-            if let Some(c) = value_class(prop, &value) {
-                classes.push(c);
-                continue;
-            }
+        if levels & levels::VALUE_CLASSES != 0
+            && let Some(c) = value_class(prop, &value)
+        {
+            classes.push(c);
+            continue;
         }
         inline.push((prop, value));
     }
@@ -891,12 +1094,15 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
     if !inline.is_empty() {
         out.push_str(" style=\"");
         for (i, (p, v)) in inline.iter().enumerate() {
-            if i > 0 {
+            if i > 0 && levels & levels::NUM_TRIM != 0 {
                 out.push(';');
             }
             out.push_str(p);
             out.push(':');
             let _ = escape_into(out, v);
+            if levels & levels::NUM_TRIM == 0 {
+                out.push(';');
+            }
         }
         out.push('"');
     }
@@ -1111,7 +1317,6 @@ const PSTRUTS: &[(&str, &str)] = &[
 ];
 // PSTRUTS-END
 
-
 /// The properties of a vertical list's own geometry, and of its item's place.
 const GEOM_PROPS: &[&str] = &["padding-top", "height", "vertical-align"];
 const ITEM_PROPS: &[&str] = &["top", "margin-left", "margin-right"];
@@ -1324,7 +1529,12 @@ fn value_class(prop: &str, value: &str) -> Option<String> {
 }
 
 /// The stylesheet the compact output needs.
+///
+/// It is KaTeX 0.18.5's `katex.css` (its font files are loaded from `fonts/`, as there, but
+/// only as WOFF2) with the rules for the compact output
+/// added, so it also styles the KaTeX-compatible output. Generated by
+/// `tools/gen_compact_css.py` from `katex.css` and the tables in this file.
 #[must_use]
-pub fn stylesheet() -> String {
-    String::new()
+pub const fn stylesheet() -> &'static str {
+    include_str!("../data/katex-compact.css")
 }
