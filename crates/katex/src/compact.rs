@@ -71,8 +71,11 @@ pub mod levels {
     pub const SINGLE: u32 = 1 << 17;
     /// An empty spacing span is an ordinary inline element with a margin, not an inline block.
     pub const INLINE_GLUE: u32 = 1 << 18;
+    /// The content of a row of a stack is not in a wrapper span of its own: the row's line holds
+    /// it directly.
+    pub const ROW_CONTENT: u32 = 1 << 19;
     /// Every step.
-    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE;
+    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE | ROW_CONTENT;
     /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
     ///
     /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
@@ -216,33 +219,7 @@ fn convert(node: &HtmlDomNode, depth: usize, sf: Rounding) -> Option<Node> {
             ],
             kids: Vec::new(),
         }),
-        HtmlDomNode::Symbol(symbol) => {
-            let needs_span =
-                symbol.italic > 0.0 || !symbol.classes.is_empty() || !symbol.style.is_empty();
-            if !needs_span {
-                return Some(Node::Text(symbol.text.clone()));
-            }
-            let mut style = Vec::new();
-            if symbol.italic > 0.0 {
-                style.push((
-                    "margin-right",
-                    sf.apply("margin-right", &make_em(symbol.italic)),
-                ));
-            }
-            style.extend(
-                symbol
-                    .style
-                    .iter()
-                    .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v))),
-            );
-            Node::El(El {
-                tag: Tag::Span,
-                classes: symbol.classes.iter().map(str::to_owned).collect(),
-                style,
-                attrs: Vec::new(),
-                kids: vec![Node::Text(symbol.text.clone())],
-            })
-        }
+        HtmlDomNode::Symbol(symbol) => symbol_node(symbol, sf),
         HtmlDomNode::SvgNode(svg) => {
             let mut kids = Vec::with_capacity(svg.children.len());
             for child in &svg.children {
@@ -299,6 +276,38 @@ fn convert(node: &HtmlDomNode, depth: usize, sf: Rounding) -> Option<Node> {
             })
         }
         HtmlDomNode::MathML(_) => return None,
+    })
+}
+
+/// A symbol (one character of a formula) as a node: plain text if it needs nothing, otherwise a
+/// span with its font classes, its italic correction and its colour.
+///
+/// This is the one place where a run of symbols is written out; the steps after it (merging text
+/// spans, unwrapping, folding spaces) only see text and spans.
+fn symbol_node(symbol: &crate::dom_tree::SymbolNode, sf: Rounding) -> Node {
+    let needs_span = symbol.italic > 0.0 || !symbol.classes.is_empty() || !symbol.style.is_empty();
+    if !needs_span {
+        return Node::Text(symbol.text.clone());
+    }
+    let mut style = Vec::new();
+    if symbol.italic > 0.0 {
+        style.push((
+            "margin-right",
+            sf.apply("margin-right", &make_em(symbol.italic)),
+        ));
+    }
+    style.extend(
+        symbol
+            .style
+            .iter()
+            .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v))),
+    );
+    Node::El(El {
+        tag: Tag::Span,
+        classes: symbol.classes.iter().map(str::to_owned).collect(),
+        style,
+        attrs: Vec::new(),
+        kids: vec![Node::Text(symbol.text.clone())],
     })
 }
 
@@ -582,6 +591,13 @@ fn walk(el: &mut El, role: Role, levels: u32) {
         }
     }
     let plain = kid_role == Role::Normal && plain_parent(el);
+    if kid_role == Role::Wrapper && levels & levels::ROW_CONTENT != 0 && el.has("X") {
+        for kid in &mut el.kids {
+            if let Node::El(wrapper) = kid {
+                unwrap_row_content(wrapper);
+            }
+        }
+    }
     if kid_role == Role::Wrapper && levels & levels::PSEUDO != 0 && el.has("X") {
         for kid in &mut el.kids {
             if let Node::El(wrapper) = kid {
@@ -990,6 +1006,22 @@ fn glue_of_el(el: &El) -> bool {
         && el.attrs.is_empty()
         && el.style.len() == 1
         && el.style[0].0 == "margin-right"
+}
+
+/// A row of a stack, `<pstrut/><span>content</span>`: the span is an inline block that only
+/// holds the content (and gives it its own line to be centred or left-aligned in); with the
+/// content directly in the row, the row's line holds it as it held the inline block.
+fn unwrap_row_content(row: &mut El) {
+    let [Node::El(pstrut), Node::El(content)] = row.kids.as_slice() else {
+        return;
+    };
+    if !(pstrut.has("pstrut") && is_neutral(content)) {
+        return;
+    }
+    let Some(Node::El(content)) = row.kids.pop() else {
+        return;
+    };
+    row.kids.extend(content.kids);
 }
 
 /// A vertical list of one item: the `X` and the wrapper of its item become one element `Y`. The
