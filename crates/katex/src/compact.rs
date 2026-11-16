@@ -71,11 +71,8 @@ pub mod levels {
     pub const SINGLE: u32 = 1 << 17;
     /// An empty spacing span is an ordinary inline element with a margin, not an inline block.
     pub const INLINE_GLUE: u32 = 1 << 18;
-    /// The content of a row of a stack is not in a wrapper span of its own: the row's line holds
-    /// it directly.
-    pub const ROW_CONTENT: u32 = 1 << 19;
     /// Every step.
-    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE | ROW_CONTENT;
+    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE;
     /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
     ///
     /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
@@ -591,13 +588,6 @@ fn walk(el: &mut El, role: Role, levels: u32) {
         }
     }
     let plain = kid_role == Role::Normal && plain_parent(el);
-    if kid_role == Role::Wrapper && levels & levels::ROW_CONTENT != 0 && el.has("X") {
-        for kid in &mut el.kids {
-            if let Node::El(wrapper) = kid {
-                unwrap_row_content(wrapper);
-            }
-        }
-    }
     if kid_role == Role::Wrapper && levels & levels::PSEUDO != 0 && el.has("X") {
         for kid in &mut el.kids {
             if let Node::El(wrapper) = kid {
@@ -1006,22 +996,6 @@ fn glue_of_el(el: &El) -> bool {
         && el.attrs.is_empty()
         && el.style.len() == 1
         && el.style[0].0 == "margin-right"
-}
-
-/// A row of a stack, `<pstrut/><span>content</span>`: the span is an inline block that only
-/// holds the content (and gives it its own line to be centred or left-aligned in); with the
-/// content directly in the row, the row's line holds it as it held the inline block.
-fn unwrap_row_content(row: &mut El) {
-    let [Node::El(pstrut), Node::El(content)] = row.kids.as_slice() else {
-        return;
-    };
-    if !(pstrut.has("pstrut") && is_neutral(content)) {
-        return;
-    }
-    let Some(Node::El(content)) = row.kids.pop() else {
-        return;
-    };
-    row.kids.extend(content.kids);
 }
 
 /// A vertical list of one item: the `X` and the wrapper of its item become one element `Y`. The
