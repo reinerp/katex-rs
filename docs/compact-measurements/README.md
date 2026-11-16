@@ -173,7 +173,7 @@ newlines at every script. The compact output gives `before si+1=fi(si) after`, o
 letters; fractions and matrices still break lines where blocks are. The TeX is in `aria-label`
 (not copied) unless `compact_label` is off.
 
-## 6. Tried and dropped
+## 6. Tried and dropped (first design)
 
 - `<q>` for `<span>` (a tag that is neither a formatting element nor a block): 18.6% fewer raw bytes
   (493 KB to 400 KB; zstd -3.6%), pixel-identical, but each `q` has `::before`/`::after` from the user
@@ -183,3 +183,206 @@ letters; fractions and matrices still break lines where blocks are. The TeX is i
 - Folding the glue into text (a span around the neighbouring text) saves bytes but no elements.
 - Merging a size span with a non-text child, and `font-size` onto the vertical list itself:
   not exact, not tried further.
+
+## 7. The second version: runs and lines (2026-11-15, later)
+
+Same machine, browser, corpus and fixture as above, more load (load average 3 to 6 during the
+timing runs, from another agent's Chrome benchmarks: differences under about 15% are noise,
+medians of interleaved runs with the minimum next to them). `tools/v2/` has the scripts:
+`mkmicro.py` (3,000 paragraphs with one hand-written or rendered formula), `measure3.py` and
+`bench3.sh` (every run traced; settle time and main-thread CPU time of the phases), `geo.sh`,
+`geocmp.sh`, `geocmp2.py` (geometry), `wrapcmp.sh` (line breaking), `pixcheck.sh` (pixels),
+`regen.sh`, `mkfix.sh`. The reference for geometry and pixels is KaTeX JS 0.18.5 in rows that do
+not wrap (`min-width: max-content`: `<wbr>` breaks also inside `nowrap`). `results/v2/` has the
+raw output.
+
+### What the time follows
+
+Experiments on the fixture page (`bench3.sh`, 7 runs, medians / minimum, floor 284 / 281):
+
+| page | settle ms | what it shows |
+| --- | --- | --- |
+| first design (`levels::CLASSIC`) | 1,830 / 1,785 | |
+| an intermediate build of the second design | 1,617 / 1,482 | |
+| the same page without any `class` or `style` attribute | 1,018 / 968 | parsing and the number of nodes alone: 600 ms over the floor |
+| the second design | 1,170 / 1,122 | |
+| the same without the 125 corpus formulas that have a stack | 814 / 753 | these are the large formulas (about a quarter of the elements) |
+| the same without the pstrut classes (no `::before` in the rows) | 1,178 / 1,154 | a pstrut pseudo-element costs nothing |
+| removing the empty spacing spans (about 11,000 in the fixture, intermediate build) | -270 (1,617 to 1,344) | about 24 microseconds a span for everything |
+| removing the `<wbr>` (intermediate build) | -70 | |
+
+Parsing is 4 microseconds a node whatever the node is (an element or a text node; with and
+without attributes); a 3,000 copy page of `a+b+c=d` takes 407 ms in the first design with its
+four bases and 283 ms as one element of text, and 170 ms as one plain span: the cost is the
+number of nodes and then the number of atomic inlines.
+
+### Micro table: 3,000 paragraphs of one formula
+
+Settle ms, median / minimum of 5 interleaved runs, final build (floor 280 / 255 at this load;
+`results/v2/micro.txt`; a run with one more step and less load is `micro_final_build_with_row_content.txt`):
+
+| formula | stock KaTeX markup | first design (`CLASSIC`) | second design (`ALL`) |
+| --- | --- | --- | --- |
+| `a+b+c=d` | 3,144 / 2,760 | 1,443 / 1,245 | 666 / 647 |
+| `\text{hello world}` | 987 / 804 | 463 / 380 | 362 / 316 |
+| `x_i` | 2,746 / 2,243 | 826 / 687 | 483 / 473 |
+| `x^2` | 2,186 / 1,912 | 776 / 715 | 534 / 431 |
+| `x_i^2` | 3,218 / 2,529 | 1,002 / 910 | 971 / 895 |
+| `\frac{a}{b}` | 3,296 / 2,348 | 1,131 / 1,051 | 1,334 / 967 |
+| `\sqrt{x}` | 2,643 / 2,367 | 1,129 / 1,038 | 1,160 / 1,026 |
+| `\sum_{i=0}^{n} i` | 3,683 / 3,319 | 1,197 / 1,169 | 1,181 / 1,090 |
+| 2x2 `pmatrix` | 5,920 / 5,379 | 1,899 / 1,755 | 2,185 / 1,871 |
+| `a\,b\;c\quad d` | 2,147 / 1,750 | 636 / 560 | 639 / 444 |
+
+Everything that is runs of text and lone scripts is 1.8 to 2.4 times faster than the first design
+and 4 to 5 times faster than stock KaTeX. Everything that is a stack (sub and superscript
+together, fraction, root, big operator with limits, matrix) is as before: the stack's inline
+block and its rows are the same boxes.
+
+### Fixture, 4,800 formulas
+
+Settle ms, median / minimum (`results/v2/fixture_run*.txt`; the run to run spread is the load):
+
+| run | stock KaTeX (HTML + MathML) | first design | second design | second design with `aria-label` | floor |
+| --- | --- | --- | --- | --- | --- |
+| 4 (11 runs) | 7,210 / 5,851 | 2,399 / 1,809 | 1,515 / 1,257 | 1,517 / 1,153 | 403 / 281 |
+| 5 (11 runs) | | 2,605 / 2,141 | 1,694 / 1,477 | | 426 / 352 |
+| 6 (9 runs) | 7,619 / 6,417 | 2,442 / 1,894 | 1,460 / 1,240 | 1,494 / 1,229 | 378 / 272 |
+| 3 (11 runs, one more step) | | 1,855 / 1,767 | 1,251 / 1,157 | | 295 / 264 |
+
+The floor is the same page with every formula replaced by its plain text in one `<span>`
+(288,790 bytes). What is left above the floor, second design against first design: 1.6 to 1.9
+times less (medians 1,075 to 1,150 against 1,560 to 2,070 ms; minima 880 to 970 against
+1,500 to 1,620 ms): **about 1.7 times, not the 2 that was aimed for**; the second design is at
+about 3.4 times the floor where the first was at about 6, stock KaTeX at about 18 to 20.
+
+Main thread CPU time of the phases (ms, median; run 3, the least loaded, 11 runs; the traces of
+the other runs have the same shares):
+
+| | ParseHTML | UpdateLayoutTree | Layout | PrePaint | Paint | whole task |
+| --- | --- | --- | --- | --- | --- | --- |
+| first design | 508 | 245 | 659 | 187 | 35 | 1,813 |
+| second design | 382 | 155 | 379 | 121 | 20 | 1,240 |
+| floor | 86 | 24 | 84 | 33 | 3 | 274 |
+
+Sizes (corpus of 1,127 formulas, original display style; fixture in brackets):
+
+| | bytes | per formula | zstd -9 | gzip -9 | elements | per formula |
+| --- | --- | --- | --- | --- | --- | --- |
+| stock (HTML + MathML) | 2,349,235 | 2,083 | 69,036 | 95,043 | 63,539 | 56.3 |
+| first design (`CLASSIC`) | 492,982 | 437 | 27,872 | 30,040 | 15,378 | 13.6 |
+| second design | 353,150 | 313 | 25,473 | 26,982 | 10,318 | 9.15 |
+| second design with `aria-label` | 389,411 | 345 | 37,712 | 40,016 | 10,318 | 9.15 |
+
+Fixture: formulas 346 KB against 489 KB (1.68 MB page against 2.28 MB), 51,500 elements on the
+page against 73,100 (the paragraphs' own are 6,400). The stylesheet is 50.7 KB (first version 44 KB).
+
+Server time per formula (`ch.rs`, 30 repetitions, the corpus): stock 72, first design 99, second
+design 102 microseconds, with the label 105.
+
+By step (elements and bytes per formula in the corpus; fixture times from runs of the build that
+had it, minimum next to the median where I have them):
+
+| step | bytes | zstd -9 | elements | fixture settle (median / minimum), floor 294 / 277 |
+| --- | --- | --- | --- | --- |
+| first design (`CLASSIC`) | 492,982 | 27,872 | 13.6 | 1,830 / 1,807 |
+| + `FLAT` (no bases, one strut, `<wbr>`) and the glue folded into the neighbours | 396,978 | 26,531 | 10.35 | not run separately |
+| + `SINGLE` (lone scripts inline) | 354,378 | 25,502 | 9.15 | 1,271 / 1,239 (with all glue steps, `<wbr>` between every two bases) |
+| + `INLINE_GLUE`, `compact_wrap_min` 8 (= `ALL`) | 353,150 | 25,473 | 9.15 | 1,251 / 1,157 |
+
+### Geometry against KaTeX JS 0.18.5, all 1,128 formulas (`results/v2/geometry.txt`)
+
+Inline and display, in rows of 16 px text, and in a paragraph of 16 px text with a marker at its
+baseline:
+
+- Glyph rectangles: 13,592 glyphs in each style. The left and the width of every one are KaTeX's
+  (maximum difference 0.0000 px, nothing differs). The top of 2,552 (inline) and 2,613 (display)
+  of them differs, by 1/64, 2/64 or 3/64 px: **maximum 0.047 px**, no formula has a glyph more than
+  0.05 px off (the top of a text box is that of the font's ascent rounded, and a
+  `vertical-align` baseline is rounded differently from a `top`; not explained further, it is the
+  same with `position: relative`). Formula width and box left and right: no difference.
+- Paragraph of text around an inline formula: the baseline of the text before the formula is the
+  same for 1,120 of 1,128 formulas (the other eight differ by 1/64 px, one by 16.9 px: a formula
+  that wraps), the paragraph height is the same for 1,117 (nine differ by 1/64 px, three by more
+  than that: formulas 4, 26 and 722, which wrap; -10.6, +31.5 and -0.5 px). In display style: no
+  difference above 1/64 px.
+- With the extents of the host's line given (`compact_line((0.878, 0.361))`, the 17 px and 7 px
+  of the test paragraph in the em of 19.36 px) 1,017 of the 1,128 inline formulas have no strut
+  and the geometry is the same as above, also the paragraph heights.
+
+Where it is knowingly not the same: a formula that wraps has its strut in the first line only
+(paragraph height above); a formula shorter than 8 characters has no break opportunity (see the
+next test); formulas with `\newline`, a tag or `fleqn` keep their bases (output of the first
+design).
+
+### Line breaking (`wrapcmp.sh`)
+
+Every corpus formula inline in a paragraph of 16 px text of 300 px and of 760 px; a formula's
+line starts are the glyphs that are left of the glyph before them and lower (`wrapgeom.py`):
+
+| `compact_wrap_min` | wraps in KaTeX JS (300 px) | same line starts | `<wbr>` in the corpus |
+| --- | --- | --- | --- |
+| 0 | 318 | 318 | 492 |
+| 6 | 318 | 318 | 370 |
+| 8 (default) | 318 | 318 | 282 |
+| 10 | 318 | 315 | 174 |
+| 16 | 318 | 259 | |
+| 24 | 318 | 152 | |
+
+At 760 px (default): 20 formulas wrap, 20 with the same line starts; no formula wraps only in the
+compact output. The paragraph height differs for 18 of the 318 wrapped formulas at 300 px (the
+single strut, above) and none at 760 px.
+
+### Pixels, against KaTeX JS 0.18.5 (`results/v2/pixels.txt`)
+
+Every formula in a row of 20 px text, inline and display, device scale 1 and 2:
+
+| output | scale 1 inline | scale 1 display | scale 2 inline | scale 2 display |
+| --- | --- | --- | --- | --- |
+| first design `ALL` (`CLASSIC`) | 0 | 1 formula, 238 px | 14 formulas, 6,583 px | 19 formulas, 8,973 px |
+| second design `ALL` | 0 | 2 formulas (4, 780), 368 px | 19 formulas, 11,545 px | 50 formulas, 45,238 px |
+
+I looked at the worst ones (`crops/v2/`; rows are KaTeX JS, compact, and the difference in red):
+`glyph_aa_display_id16_dpr2.png` (the most pixels, 4,058), `glyph_aa_inline_id85_dpr2.png`,
+`glyph_aa_display_id780_dpr1.png`. They are the same layout; a run of text or a symbol whose
+position differs by 1/64 or 2/64 px has glyph edges that anti-alias on the neighbouring device
+pixel (a difference in the pixels of a glyph's outline, not a shift). More formulas than in the
+first design differ at scale 2 because the top of more glyph boxes is off by a layout unit; no
+formula looks different. (A build that also unwrapped the content of a stack's row had parentheses
+a pixel lower in aligned formulas, 9 formulas at scale 1: taken out again.)
+
+### Copy and paste
+
+`before si+1=fi(si) after` for `s_{i+1} = f_i(s_i)`, as in the first design (`tools/seltest.py`).
+
+### Tried and not built in
+
+- Composite font family: one CSS family `KM` with `unicode-range` faces (Math-Italic for letters,
+  Main for the rest) so that letters need no spans, and a generated TrueType font of empty glyphs
+  for the Unicode space characters (U+2004, U+2006, U+205F, ...) so that spaces are characters.
+  It works: a run of `a+b+c=d` is one text node; 39,409 against 49,152 elements in the fixture,
+  fixture settle 1,108 against 1,271 ms (floor 294), `a+b+c=d` 283 ms against 433 in the micro
+  table (and a character as a break opportunity costs nothing; a `<wbr>` costs 90 ms). Findings:
+  Chrome on Linux (headless 156) rounds the advance of every glyph to a pixel unless
+  `text-rendering: geometricPrecision` is set (the widths of `xx` with the space characters were
+  integers, 20, 23, 24, 25, 39, and fractional with it), so spaces and italic corrections in a
+  font are inexact in the default setting on such platforms and need the property; the line box of
+  the letters in the Math-Italic spans (its font box is 1 px lower than Main's) had to be restored
+  with a `::after` in the Math font; a stack's row of letters in the family needs a Main span for
+  text that KaTeX sets in Main (`\text`, function names); the glyph geometry was exact in x
+  (largest 0.27 px with the margins of letters left in), the paragraph heights differed for 29
+  inline formulas. The work is in the commit `shelved/composite-km-font` (`COMPOSITE`, `SPACERS`,
+  `tools/gen_compact_fonts.py`); the orchestrator took it over with a generated font.
+- Stacks as lines (rows are blocks with `line-height: L_i`, no pstruts; the baseline distance of
+  two rows is `(L_1 + L_2) / 2`, independent of the font's ascent and descent as long as the strut
+  fonts are the same): works for a fraction (numerator, bar and denominator within 0.05 px of
+  KaTeX for the glyphs and 0.125 px for the bar, paragraph height unchanged) when the container
+  has half the font size and the rows' content is in inner spans of `line-height: 0` (a row that
+  has a baseline-aligned inline block, the bar, makes the line reach the baseline unless
+  `L / 2` is at least `(ascent - descent) / 2` of the strut font, 0.31 em for KaTeX_Main; a tiny
+  container font would do for that but Chrome clamps font sizes below 6 px; the margin box of the
+  container is set so that it is zero-height near the baseline). 3,000 fractions settle in 506 ms
+  against 609 ms with pstruts (floor 174): 24% of the cost of the stack. In the fixture a
+  pstrut pseudo-element costs nothing (removing the classes: 1,178 against 1,185 ms) and the
+  stacks' share is small, so it was not built into the Rust code.
+- The first design's list of rejected steps (section 6) stands.

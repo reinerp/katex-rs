@@ -1,0 +1,3 @@
+fx_old         settle med  1855 min  1767 (load 3.8) | cpu: parse  508 style  245 layout  659 prepaint  187 paint  35 total-task  1813 (min  1719)
+fx_new         settle med  1251 min  1157 (load 3.7) | cpu: parse  382 style  155 layout  379 prepaint  121 paint  20 total-task  1240 (min  1145)
+fx_floor       settle med   295 min   264 (load 3.7) | cpu: parse   86 style   24 layout   84 prepaint   33 paint   3 total-task   274 (min   252)

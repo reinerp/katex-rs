@@ -1,0 +1,12 @@
+== I
+formulas 1128 (char count mismatch 0), glyphs 13592, differing glyphs 0, max shift (x or width) 0.0000 px, p99 0.0000; formulas over 0.05 px: 0 []; formula width change max 0.0000
+paragraph height   differing   11 / 1128  over .05: 3  max 31.5156 px  p99 0.0000
+baseline y         differing    8 / 1128  over .05: 1  max 16.8906 px  p99 0.0000
+katex box left/right differing    0 / 1128  over .05: 0  max 0.0000 px  p99 0.0000
+formulas 1128 glyphs 13592 differing glyphs 2552 max 0.046875 formulas over 0.05 : 0 []
+== D
+formulas 1128 (char count mismatch 0), glyphs 13592, differing glyphs 0, max shift (x or width) 0.0000 px, p99 0.0000; formulas over 0.05 px: 0 []; formula width change max 0.0000
+paragraph height   differing    7 / 1128  over .05: 0  max 0.0156 px  p99 0.0000
+baseline y         differing    0 / 1128  over .05: 0  max 0.0000 px  p99 0.0000
+katex box left/right differing    0 / 1128  over .05: 0  max 0.0000 px  p99 0.0000
+formulas 1128 glyphs 13592 differing glyphs 2613 max 0.046875 formulas over 0.05 : 0 []

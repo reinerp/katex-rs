@@ -21,10 +21,16 @@ fn settings(display: bool, mode: &str) -> Settings {
         let lv: u32 = it.next().filter(|s| !s.is_empty()).map_or(katex::compact::levels::ALL, |s| s.parse().unwrap());
         let mut label = true;
         let mut prec = 0u32;
+        let mut wrap = katex::compact::DEFAULT_WRAP_MIN;
+        let mut line: Option<(f64, f64)> = None;
         for t in it {
             if t == "nolabel" { label = false; } else if let Some(n) = t.strip_prefix('p') { prec = n.parse().unwrap(); }
+            else if let Some(n) = t.strip_prefix('w') { wrap = n.parse().unwrap(); }
+            else if let Some(n) = t.strip_prefix('l') { let (a, d) = n.split_once(',').unwrap(); line = Some((a.parse().unwrap(), d.parse().unwrap())); }
         }
-        b.output(OutputFormat::CompactHtml).compact_levels(lv).compact_label(label).compact_precision(prec)
+        let mut b = b.output(OutputFormat::CompactHtml).compact_levels(lv).compact_label(label).compact_precision(prec).compact_wrap_min(wrap);
+        if let Some(l) = line { b = b.compact_line(l); }
+        b
     };
     b.build()
 }
