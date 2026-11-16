@@ -134,6 +134,30 @@ margin (`INLINE_GLUE`: an empty inline box with a margin takes the room an empty
 does, and is not an atomic inline). A space between two runs of text (an operator with its
 spaces) is the margins of one span around the text, and a margin on a size span is in its em.
 
+## Font runs (`FONT_RUN`, off by default)
+
+`levels::ALL | levels::FONT_RUN` writes the part of every formula that a generated font can express as text nodes of that
+font, and everything else as the flat design does, in the same tree. The font has the layout in its glyphs: every letter,
+digit and operator of Main-Regular, Math-Italic, a subset of AMS and Size1-4, at the sizes and baseline shifts of the scripts
+that occur, and spacers of any advance, positive and negative. So
+
+- consecutive nodes that the font can express (symbols, the glue between atoms, kerns, italic corrections, lone and stacked
+  sub- and superscripts whose content is expressible and whose (size, shift) the font has, `\not`-style overlaps, limits
+  centred over an operator) are one text node;
+- a node it cannot express stays an element (a fraction's stack, SVG, a rule or border, a bold or calligraphic letter, a script
+  whose shift the font lacks, text mode), and its children are treated the same way, so a numerator is a text node in a row
+  of the stack and `a + \frac{x^2}{y_i} = \mathbf{b}` is a text node, a stack, a text node, a span and a text node;
+- the root (`.katex`) gets the class `mf`, which puts the generated font first in its font family; stock KaTeX fonts stay behind it
+  and in the families of the classes that set one, so the text that is not in the font is drawn as before.
+
+`mathrun::stylesheet(font_url, blank_url)` is the compact stylesheet with the font rules and `@font-face`;
+`mathrun::FONT_WOFF2` is the font (serve it under `mathrun::FONT_FILE_NAME`, which has the font's version in it) and
+`mathrun::FONT_VERSION`, `FONT_FAMILY` name it. `compact_label`, `compact_line` (no strut where the host's line has the room,
+as before) and `compact_wrap_min` (the `<wbr>` between bases, counted in the characters KaTeX has) work as they do without the
+step. The text of a formula with the step on is private-use characters where it is in the font: the TeX is in the
+`aria-label`, and text mode (`\text`) stays text in the stock font so that it can be selected. `docs/FONT.md` has the design, the
+measurements and the risks (the page needs `text-rendering: geometricPrecision` on the formula, which the stylesheet sets).
+
 ## Settings that depend on the page
 
 - `compact_wrap_min` (default 8): see above.
