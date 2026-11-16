@@ -127,7 +127,7 @@ def main():
     fstruts = table('FSTRUTS')
     # A formula without bases: `.f`, or `.tN` for a strut that has a class, is `nowrap` (as its
     # bases were) and the strut is a pseudo-element of the formula itself.
-    out.append(','.join(['.katex.f'] + ['.katex.t%s' % b36(i) for i in range(len(fstruts))]) + '{white-space:nowrap}')
+    out.append(','.join(['.katex.f', '.katex.w'] + ['.katex.t%s' % b36(i) for i in range(len(fstruts))]) + '{white-space:nowrap}')
     out.append('.katex.f::before{content:"";display:inline-block;height:var(--h);vertical-align:var(--v,0)}')
     for i, (h, v) in enumerate(fstruts):
         out.append('.katex.t%s::before{content:"";display:inline-block;height:%s;%s}' % (b36(i), h, 'vertical-align:%s' % v if v else ''))

@@ -256,6 +256,15 @@ pub struct Settings {
     /// Significant figures of the `em` numbers [`OutputFormat::CompactHtml`] writes (0 for
     /// all the digits KaTeX computes, which is four decimals).
     pub compact_precision: u32,
+    /// The shortest formula (in characters) that [`OutputFormat::CompactHtml`] lets wrap inside an
+    /// inline line of text, at the places KaTeX does; shorter ones stay in one piece, which saves
+    /// one element per line break opportunity (see `crate::compact`).
+    pub compact_wrap_min: usize,
+    /// How far the line of text that holds an inline formula extends above and below the
+    /// baseline, in em of the formula (`(ascent, descent)`; the formula's font is 1.21 times the
+    /// text's). A formula whose height and depth fit gets no strut of its own. `None`: unknown,
+    /// every formula has its strut.
+    pub compact_line: Option<(f64, f64)>,
 }
 
 /// Builder for [`Settings`], returned by [`Settings::builder`].
@@ -290,6 +299,8 @@ struct SettingsOptional {
     compact_levels: Option<u32>,
     compact_label: Option<bool>,
     compact_precision: Option<u32>,
+    compact_wrap_min: Option<usize>,
+    compact_line: Option<(f64, f64)>,
 }
 
 impl SettingsBuilder {
@@ -341,6 +352,10 @@ impl SettingsBuilder {
         compact_label / maybe_compact_label: bool;
         /// Significant figures of the compact output's `em` numbers (0: exact).
         compact_precision / maybe_compact_precision: u32;
+        /// Shortest formula (in characters) that the compact output lets wrap in a line of text.
+        compact_wrap_min / maybe_compact_wrap_min: usize;
+        /// Ascent and descent of the host's line in em of the formula; formulas that fit get no strut.
+        compact_line / maybe_compact_line: (f64, f64);
     }
 
     /// Builds the [`Settings`] from the values set so far.
@@ -401,6 +416,8 @@ impl SettingsBuilder {
             compact_levels,
             compact_label,
             compact_precision,
+            compact_wrap_min,
+            compact_line,
         } = self.opt;
         Settings {
             display_mode: display_mode.unwrap_or(false),
@@ -426,6 +443,8 @@ impl SettingsBuilder {
             compact_levels: compact_levels.unwrap_or(crate::compact::levels::ALL),
             compact_label: compact_label.unwrap_or(true),
             compact_precision: compact_precision.unwrap_or(crate::compact::DEFAULT_PRECISION),
+            compact_wrap_min: compact_wrap_min.unwrap_or(crate::compact::DEFAULT_WRAP_MIN),
+            compact_line,
         }
     }
 }

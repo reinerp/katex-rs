@@ -200,6 +200,57 @@ fn label_and_roles() {
             && display.contains(r#" role="math""#));
 }
 
+/// A formula has no `katex-base` blocks: its content is inline in the formula element, with a
+/// `<wbr>` where KaTeX allows a line break (in inline style, for formulas long enough to wrap).
+#[test]
+fn formula_is_inline_content_with_break_opportunities() {
+    let long = r"a+b+c+d=e+f+g";
+    let inline = compact(long, false, levels::ALL, false);
+    assert!(!inline.contains("katex-base") && !inline.contains("class=\"B"));
+    assert!(inline.contains("<wbr>"), "{inline}");
+    let display = compact(long, true, levels::ALL, false);
+    assert!(!display.contains("<wbr>"), "{display}");
+    let short = compact(r"a+b", false, levels::ALL, false);
+    assert!(!short.contains("<wbr>"), "{short}");
+    // The steps of the first design keep the bases.
+    let exact = compact(long, false, levels::EXACT, false);
+    assert!(exact.contains("class=\"B") && !exact.contains("<wbr>"), "{exact}");
+}
+
+/// A lone subscript or superscript is an inline element, not a stack.
+#[test]
+fn lone_script_is_shifted_inline() {
+    let out = compact(r"x_i + y^2", false, levels::ALL, false);
+    for stack in ["class=\"X", "class=\"Y", "pstrut", "class=\"W"] {
+        assert!(!out.contains(stack), "{out}");
+    }
+    assert!(out.contains("line-height:0") || out.contains("class=\"F63 N z"), "{out}");
+    // A pair is still a stack.
+    let pair = compact(r"x_i^2", false, levels::ALL, false);
+    assert!(pair.contains("class=\"X"), "{pair}");
+}
+
+/// With the extents of the host's line a formula that fits has no strut.
+#[test]
+fn strut_is_left_out_when_the_line_has_the_room() {
+    let render = |line: Option<(f64, f64)>| {
+        let mut b = Settings::builder()
+            .output(OutputFormat::CompactHtml)
+            .compact_label(false);
+        if let Some(l) = line {
+            b = b.compact_line(l);
+        }
+        render_to_string(&KatexContext::default(), r"x^2", &b.build()).expect("render")
+    };
+    let with = render(None);
+    assert!(!with.contains("class=\"katex w\""), "{with}");
+    assert!(with.contains("::before") || with.contains("class=\"katex t") || with.contains("--h"), "{with}");
+    let without = render(Some((1.0, 0.5)));
+    assert!(without.starts_with("<span class=\"katex w\""), "{without}");
+    let tall = render(Some((0.5, 0.5)));
+    assert!(!tall.starts_with("<span class=\"katex w\""), "{tall}");
+}
+
 #[test]
 fn compact_is_much_smaller() {
     let ctx = KatexContext::default();

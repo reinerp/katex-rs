@@ -316,7 +316,7 @@ body{counter-reset:katexEqnNo mmlEqnNo}
 .katex .u1l::before{content:"";display:inline-block;height:1.0413em;vertical-align:-.15em}
 .katex .u1m::before{content:"";display:inline-block;height:.7858em;vertical-align:-.3552em}
 .katex .u1n::before{content:"";display:inline-block;height:.786em;vertical-align:-.15em}
-.katex.f,.katex.t0,.katex.t1,.katex.t2,.katex.t3,.katex.t4,.katex.t5,.katex.t6,.katex.t7,.katex.t8,.katex.t9,.katex.ta,.katex.tb,.katex.tc,.katex.td,.katex.te,.katex.tf,.katex.tg,.katex.th,.katex.ti,.katex.tj,.katex.tk,.katex.tl,.katex.tm,.katex.tn,.katex.to,.katex.tp,.katex.tq,.katex.tr,.katex.ts,.katex.tt,.katex.tu,.katex.tv,.katex.tw,.katex.tx,.katex.ty,.katex.tz,.katex.t10,.katex.t11,.katex.t12,.katex.t13{white-space:nowrap}
+.katex.f,.katex.w,.katex.t0,.katex.t1,.katex.t2,.katex.t3,.katex.t4,.katex.t5,.katex.t6,.katex.t7,.katex.t8,.katex.t9,.katex.ta,.katex.tb,.katex.tc,.katex.td,.katex.te,.katex.tf,.katex.tg,.katex.th,.katex.ti,.katex.tj,.katex.tk,.katex.tl,.katex.tm,.katex.tn,.katex.to,.katex.tp,.katex.tq,.katex.tr,.katex.ts,.katex.tt,.katex.tu,.katex.tv,.katex.tw,.katex.tx,.katex.ty,.katex.tz,.katex.t10,.katex.t11,.katex.t12,.katex.t13{white-space:nowrap}
 .katex.f::before{content:"";display:inline-block;height:var(--h);vertical-align:var(--v,0)}
 .katex.t0::before{content:"";display:inline-block;height:1em;vertical-align:-.25em}
 .katex.t1::before{content:"";display:inline-block;height:.8141em;}

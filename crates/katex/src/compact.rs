@@ -90,6 +90,9 @@ pub mod levels {
 /// The default [`Settings::compact_precision`].
 pub const DEFAULT_PRECISION: u32 = 0;
 
+/// The default [`Settings::compact_wrap_min`].
+pub const DEFAULT_WRAP_MIN: usize = 8;
+
 /// Trees deeper than this are not rewritten.
 const MAX_DEPTH: usize = 512;
 
@@ -485,7 +488,7 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
         && levels & levels::UNWRAP_HTML != 0
         && !settings.fleqn
     {
-        flatten(root)
+        flatten(root, settings.compact_wrap_min, settings.compact_line)
     } else {
         None
     };
@@ -506,16 +509,24 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
     if levels & levels::INLINE_GLUE != 0 {
         inline_glue(root);
     }
-    if let Some((height, align)) = strut
+    if let Some(strut) = strut
         && let Some(katex) = katex_mut(root)
     {
-        let table_class = if levels & levels::PSEUDO != 0 {
+        let Strut {
+            height,
+            align,
+            needed,
+        } = strut;
+        let table_class = if needed && levels & levels::PSEUDO != 0 {
             pseudo_class(FSTRUTS, "t", &height, &align)
         } else {
             None
         };
         if let Some(class) = table_class {
             katex.classes.push(class);
+        } else if !needed {
+            // The line of text already has the room: `w` is only `white-space: nowrap`.
+            katex.classes.push("w".to_owned());
         } else if levels & levels::PSEUDO != 0 {
             // The strut is the formula's `::before`, sized by two custom properties.
             katex.classes.push("f".to_owned());
@@ -718,7 +729,7 @@ fn strut_extent(base: &El) -> Option<(i64, i64)> {
 /// formula has `white-space: nowrap`, which does not stop it in the browsers tried): not in
 /// display style, where the formula is not wrapped. A formula that has anything else than bases
 /// (a newline, a tag) is left as it is.
-fn flatten(root: &mut El) -> Option<(String, String)> {
+fn flatten(root: &mut El, wrap_min: usize, line: Option<(f64, f64)>) -> Option<Strut> {
     let display = root.has("katex-display");
     let katex = katex_mut(root)?;
     let (mut up, mut down) = (i64::MIN, i64::MIN);
@@ -744,17 +755,42 @@ fn flatten(root: &mut El) -> Option<(String, String)> {
     } else {
         em_str(-down)
     };
+    let fits = line.is_some_and(|(a, d)| {
+        up as f64 <= (a * 1e4).floor() && down as f64 <= (d * 1e4).floor()
+    });
+    let wrap = !display && text_len(&katex.kids) >= wrap_min;
     let mut kids = Vec::new();
     for (i, kid) in mem::take(&mut katex.kids).into_iter().enumerate() {
         let Node::El(mut base) = kid else { continue };
         base.kids.remove(0);
-        if i > 0 && !display && !base.kids.is_empty() {
+        if i > 0 && wrap && !base.kids.is_empty() {
             kids.push(Node::El(wbr()));
         }
         kids.append(&mut base.kids);
     }
     katex.kids = kids;
-    Some((height, align))
+    Some(Strut {
+        height,
+        align,
+        needed: !fits,
+    })
+}
+
+/// A formula's strut: the height of its `::before`, and whether it needs one.
+struct Strut {
+    height: String,
+    align: String,
+    needed: bool,
+}
+
+/// The number of characters of the text in `kids`.
+fn text_len(kids: &[Node]) -> usize {
+    kids.iter()
+        .map(|k| match k {
+            Node::Text(t) => t.chars().count(),
+            Node::El(e) => text_len(&e.kids),
+        })
+        .sum()
 }
 
 /// KaTeX's size multipliers: `size1` to `size11`.
