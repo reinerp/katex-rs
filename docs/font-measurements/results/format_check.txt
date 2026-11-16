@@ -1,11 +1,5 @@
-3633 glyphs
-ttf ["loaded"] 
-woff ["loaded"] 
-woff2 ["loaded"] 
-woff2u ["loaded"] 
-[[0,0,0,0]]
- woff
-[[0,0,0,0]]
- woff2
-[[0,0,0,0]]
- woff2u
+# fmtcheck.py on KaTeXMathRun-e9c82a06 (the committed font): every glyph in TTF, WOFF, WOFF 2 (transformed) and WOFF 2 (untransformed)
+3888 glyphs; document.fonts status: ttf loaded, woff loaded, woff2 loaded, woff2u loaded
+differing pixels, ttf against woff (rows of 50 px): 0 in 98 rows
+differing pixels, ttf against woff2 (rows of 50 px): 0 in 98 rows
+differing pixels, ttf against woff2u (rows of 50 px): 0 in 98 rows

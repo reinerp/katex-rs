@@ -1,0 +1,26 @@
+# KaTeX JS 0.18.5 (geometricPrecision) against the FONT_RUN output, inline formulas; mfhyb.py, mfhpix.py, mfshift.py, mfcat.py
+rows 1128
+console []
+formulas 1128 identity matched 1111
+glyph x px: median 0.0157 p95 0.0780 p99 0.1249 max 0.2499
+stock text top px: median 0.0000 p95 0.0000 p99 4.0000 max 4.0000
+width px: median 0.0156 p95 0.0625 p99 0.1094 max 0.2344
+dpr1: 1127 formulas: identical 266 (23.6%), no pixel >64/255: 877 (77.8%), median differing px 34, >200 differing px: 129, >1000: 9
+dpr2: 1127 formulas: identical 93 (8.3%), no pixel >64/255: 395 (35.0%), median differing px 156, >200 differing px: 460, >1000: 96
+dpr1: {'dy=0': 861, 'identical': 267} shifted ids (first 15): []
+dpr2: {'dy=0': 1032, 'identical': 94, 'dy=-1': 2} shifted ids (first 15): ['169', '202']
+plain glyphs and spacing (no ^ _ \frac \sqrt \text \begin): 483 formulas
+  dpr1: identical 51%, no pixel > 64/255 different 93%, median differing pixels 0; ink centroid |dx| median/p90/max 0.000/0.025/0.108, |dy| 0.000/0.001/0.003 device px
+  dpr2: identical 19%, no pixel > 64/255 different 60%, median differing pixels 15; ink centroid |dx| median/p90/max 0.005/0.067/0.168, |dy| 0.000/0.002/0.390 device px
+scripts (no stacks, no \text): 523 formulas
+  dpr1: identical 1%, no pixel > 64/255 different 72%, median differing pixels 70; ink centroid |dx| median/p90/max 0.072/0.282/0.928, |dy| 0.017/0.057/0.363 device px
+  dpr2: identical 0%, no pixel > 64/255 different 16%, median differing pixels 248; ink centroid |dx| median/p90/max 0.053/0.173/0.500, |dy| 0.043/0.124/0.839 device px
+\frac, \binom, \begin: 35 formulas
+  dpr1: identical 6%, no pixel > 64/255 different 37%, median differing pixels 115; ink centroid |dx| median/p90/max 0.032/0.162/0.577, |dy| 0.005/0.055/0.221 device px
+  dpr2: identical 0%, no pixel > 64/255 different 6%, median differing pixels 953; ink centroid |dx| median/p90/max 0.049/0.140/0.378, |dy| 0.067/0.355/0.595 device px
+\text: 76 formulas
+  dpr1: identical 18%, no pixel > 64/255 different 47%, median differing pixels 88; ink centroid |dx| median/p90/max 0.018/0.212/0.857, |dy| 0.001/0.014/0.097 device px
+  dpr2: identical 3%, no pixel > 64/255 different 26%, median differing pixels 379; ink centroid |dx| median/p90/max 0.029/0.128/0.271, |dy| 0.002/0.031/0.443 device px
+all: 1127 formulas
+  dpr1: identical 24%, no pixel > 64/255 different 78%, median differing pixels 34; ink centroid |dx| median/p90/max 0.017/0.195/0.928, |dy| 0.001/0.042/0.363 device px
+  dpr2: identical 8%, no pixel > 64/255 different 35%, median differing pixels 156; ink centroid |dx| median/p90/max 0.030/0.128/0.500, |dy| 0.005/0.095/0.839 device px

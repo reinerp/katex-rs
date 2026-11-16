@@ -1,0 +1,11 @@
+[package]
+name = "katex-font-harness"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+katex-rs = { path = "/home/agents/workspaces/katex-rs-font/crates/katex", default-features = false }
+
+[profile.release]
+debug = false

@@ -1,0 +1,26 @@
+# 300 and 760 px paragraphs, every corpus formula (mfwrap.py). Rows: the FONT_RUN output against KaTeX JS in geometricPrecision (wrapg_h),
+# against KaTeX as served, text-rendering: auto (wrap_h), and the flat design (flag off) against KaTeX as served (wrap_f).
+== wrapg_h300
+width 300: formulas that wrap in KaTeX JS: 322; same line starts: 322; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 812 of 1128 (max 30.52); text baseline marker differs (>0.05): 15 (max 16.891)
+  of the 1127 paragraphs with the same number of lines: height differs by >0.05 px in 811 (max 11.62), by >1 px in 215; baseline of the text differs in 14 (max 6.312); 1 paragraphs have another number of lines
+== wrapg_h760
+width 760: formulas that wrap in KaTeX JS: 19; same line starts: 19; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 787 of 1128 (max 2.00); text baseline marker differs (>0.05): 0 (max 0.016)
+  of the 1128 paragraphs with the same number of lines: height differs by >0.05 px in 787 (max 2.00), by >1 px in 2; baseline of the text differs in 0 (max 0.016); 0 paragraphs have another number of lines
+== wrap_h300
+width 300: formulas that wrap in KaTeX JS: 317; same line starts: 309; different: 8 [96, 313, 333, 356, 381, 412, 451, 768]; wrap only in hybrid: 6
+paragraph height differs (>0.05 px): 340 of 1128 (max 31.52); text baseline marker differs (>0.05): 20 (max 16.891)
+  of the 1123 paragraphs with the same number of lines: height differs by >0.05 px in 335 (max 10.62), by >1 px in 12; baseline of the text differs in 19 (max 6.312); 5 paragraphs have another number of lines
+== wrap_h760
+width 760: formulas that wrap in KaTeX JS: 19; same line starts: 19; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 296 of 1128 (max 24.00); text baseline marker differs (>0.05): 6 (max 1.000)
+  of the 1101 paragraphs with the same number of lines: height differs by >0.05 px in 269 (max 0.78), by >1 px in 0; baseline of the text differs in 6 (max 1.000); 27 paragraphs have another number of lines
+== wrap_f300
+width 300: formulas that wrap in KaTeX JS: 317; same line starts: 317; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 18 of 1128 (max 31.52); text baseline marker differs (>0.05): 15 (max 16.891)
+  of the 1127 paragraphs with the same number of lines: height differs by >0.05 px in 17 (max 10.62), by >1 px in 13; baseline of the text differs in 14 (max 6.312); 1 paragraphs have another number of lines
+== wrap_f760
+width 760: formulas that wrap in KaTeX JS: 19; same line starts: 19; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 0 of 1128 (max 0.02); text baseline marker differs (>0.05): 0 (max 0.016)
+  of the 1128 paragraphs with the same number of lines: height differs by >0.05 px in 0 (max 0.02), by >1 px in 0; baseline of the text differs in 0 (max 0.016); 0 paragraphs have another number of lines

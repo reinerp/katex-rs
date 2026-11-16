@@ -1,0 +1,6 @@
+text A, back(-a), element[b]                                   width 22.25 px (ideal 22.24)
+text A+B, back(-a-b), element[A]                               width 20.00 px (ideal 20.00)
+text A, back(-2a), element[B] (run total negative)             width 22.25 px (ideal 2.24)
+element[A], text back(-a) B                                    width 22.25 px (ideal 22.24)
+element[A] then text [back(-a)+B] same text node wrapper       width 42.25 px (ideal 42.24)
+text A B (no neg) | element[A]                                 width 62.25 px (ideal 62.24)

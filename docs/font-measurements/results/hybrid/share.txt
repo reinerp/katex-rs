@@ -1,0 +1,17 @@
+# what is outside text nodes (mfshare.py, mfstock.py); text as stock text
+inline all: 1127 formulas; glyphs in runs 11896 of 13411 = 88.7%; formulas with all glyphs in runs 1035; elements per formula mean 3.16 median 1 p95 10 max 46; bytes mean 239
+display all: 365 formulas; glyphs in runs 7415 of 8878 = 83.5%; formulas with all glyphs in runs 284; elements per formula mean 5.57 median 2 p95 22 max 37; bytes mean 509
+run glyphs 11924, stock chars 1854 (13.5%)
+    420 katex mf t0
+    189 katex mf f
+    183 katex mf t2
+    181 katex-error
+    155 W k4 i23 boxpad
+    124 X W k1
+     88 W k1 F63
+     77 W k0 i13 F63 x-arrow-pad
+     69 W k8 boxpad
+     66 X W k7
+     48 katex mf f F63 z5
+     23 katex mf tn
+     20 katex mf t2 mathtt

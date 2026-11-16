@@ -6,10 +6,12 @@ ap.add_argument('--fonts', default='Main-Regular,Math-Italic,AMS-Regular,Size1-R
 ap.add_argument('--closure', type=int, default=4, help='the top N pairs get the full script glyph closure; the rest only the glyphs seen there')
 ap.add_argument('--nspacers', type=int, default=14); ap.add_argument('--rules', action='store_true')
 ap.add_argument('--ams-subset', action='store_true', help='AMS-Regular restricted to blackboard capitals, those seen in the corpus and a few common symbols')
+ap.add_argument('--ids', default='all', help='all, even or odd: the formulas the pairs and spacers are derived from')
+ap.add_argument('--extra', default='', help='JSON list of [size, shift, [glyphs]] pairs to add (from mfpairs.py)')
 ap.add_argument('--ascent', type=float, default=0.6); ap.add_argument('--descent', type=float, default=0.6)
 a = ap.parse_args()
 fonts = a.fonts.split(',')
-data = [o for m in ('inline', 'display') for o in json.load(open('%s/glyphs_%s.json' % (a.data, m))) if 'g' in o]
+data = [o for m in ('inline', 'display') for o in json.load(open('%s/glyphs_%s.json' % (a.data, m))) if 'g' in o and (a.ids == 'all' or o['id'] % 2 == (0 if a.ids == 'even' else 1))]
 pc = collections.Counter(); seen = collections.defaultdict(set)
 for o in data:
     for g in o['g']:
@@ -32,6 +34,14 @@ spec = {'fonts': fonts, 'ic_fonts': ['Math-Italic'], 'ascent': a.ascent, 'descen
 for i, (s, y) in enumerate(pairs):
     glyphs = sorted(seen[(s, y)] | (cl if i < a.closure and s < 1 else set()))
     spec['pairs'].append([s, y, glyphs])
+if a.extra:
+    have = {(p[0], p[1]): p for p in spec['pairs']}
+    for size, shift, glyphs in json.load(open(a.extra)):
+        k = (size, shift)
+        if k in have:
+            have[k][2] = sorted(set(have[k][2]) | set(glyphs))
+        else:
+            spec['pairs'].append([size, shift, sorted(glyphs)])
 # named spacers from the gap clusters
 try:
     gc = json.load(open('%s/gap_clusters_inline.json' % a.data))

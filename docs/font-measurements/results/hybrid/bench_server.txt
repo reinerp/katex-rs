@@ -1,0 +1,8 @@
+# server render time of the corpus, flag off (flat design) and on (mfsrv.sh: each formula rendered 25 times in the harness, the median per formula, the minimum over the rounds, rounds interleaved)
+5 rounds, load average 11:   inline  flat mean 123.0 us, hybrid mean 91.8 us, ratio of sums 0.75, median per-formula ratio 0.83
+                             display flat mean 120.5 us, hybrid mean 102.3 us, ratio of sums 0.85, median per-formula ratio 0.92
+7 rounds, load average 20:   inline  flat mean 320.9 us, hybrid mean 229.0 us, ratio of sums 0.71, median per-formula ratio 0.78
+                             display flat mean 323.6 us, hybrid mean 226.7 us, ratio of sums 0.70, median per-formula ratio 0.80
+by length of the TeX, hybrid / flat, last run (7 rounds, load 20): inline <40 characters 0.75 (911 formulas), 40-79 0.71, 80-119 0.71, 120-199 0.71, 200+ 0.49 (6 formulas);
+display 0.75, 0.67, 0.70, 0.69, 0.51
+before DomSpan was cloned once instead of twice per span (same measurement, load 15-20): 200+ characters 1.56, 160-200 1.35, under 120 0.87 to 0.93

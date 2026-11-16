@@ -1,0 +1,7 @@
+# 24 formulas with stacks (stacks.tex: \frac, \binom, matrices, aligned, scripts on stacks, \sqrt, other fonts), mfhyb.py + mfhpix.py, differing pixels against KaTeX JS
+page default (row line-height 80px):  dpr1: identical 14, no pixel > 64/255 different 24 of 24, median 0 differing px;   dpr2: no pixel > 64 in 16 of 24 (66.7%), median 18, 3 above 200
+row line-height 1.2:                  dpr1: 23 of 24 (95.8%);  dpr2: 16 of 24 (66.7%)
+row line-height normal:               dpr1: 23 of 24;  dpr2: 16 of 24
+row line-height 3:                    dpr1: 24 of 24;  dpr2: 16 of 24
+row font Georgia/serif 22px:          dpr1: 22 of 24 (91.7%);  dpr2: 20 of 24 (83.3%)
+The one that moves with line-height 1.2 and normal: \mathbf{x} + \mathcal{L} + \mathtt{t} + \mathsf{s} (stock spans of four fonts, one device pixel at scale 2).
