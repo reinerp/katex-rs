@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile KaTeX's TTF fonts into one generated math font (feasibility prototype, see docs/FONT.md).
+"""Compile KaTeX's TTF fonts into one generated math font (see docs/FONT.md; the Rust encoder is src/mathrun.rs).
 
     python3 -I crates/katex/tools/gen_math_font.py --fonts DIR_WITH_KaTeX_TTFS --spec SPEC.json --out OUTDIR [--name NAME]
 
@@ -13,13 +13,17 @@ SPEC.json (all keys optional):
   rules        [[thickness_em, shift_em], ...] families of rule glyphs
   ascent, descent  hhea/OS/2 vertical metrics in em
   overlays     [{"base": "Font:char", "over": "Font:char", "dx": em, "dy": em, "size": s}, ...] accent composites
+  pua_only     every glyph at a private-use code point (what the Rust encoder needs; default false)
+  alt_letters  private-use twins of the real letters (only without pua_only)
 
-Writes NAME.ttf, NAME.woff, (NAME.woff2 when node's brotli is there), NAME.map.json and NAME.css.
+Writes NAME-<version>.ttf, .woff, .woff2 (needs the `brotli` command line tool: $BROTLI or PATH), .map.json and .css, where
+<version> is a hash of the map.
 Python standard library only.
 """
 
 import argparse
 import base64
+import hashlib
 import json
 import os
 import struct
@@ -146,6 +150,7 @@ class Builder:
 
     def real_cp(self, name, ch):
         """The real Unicode code point a base glyph is given, or None for a private-use one."""
+        if self.spec.get('pua_only'): return None
         bad_real = lambda c: c < 0x21 or 0x7F <= c <= 0xA0 or c == 0xAD or 0x300 <= c <= 0x36F or 0x2000 <= c <= 0x200F or 0x2028 <= c <= 0x202F or 0xD800 <= c <= 0xF8FF
         if name == 'Main-Regular' and not bad_real(ch): return ch
         if name == 'Math-Italic' and ch in self.mi: return self.mi[ch]
@@ -291,7 +296,7 @@ class Builder:
         tables = {'head': head, 'hhea': hhea, 'maxp': maxp, 'hmtx': hmtx, 'cmap': cmap, 'glyf': bytes(glyf), 'loca': loca_b,
                   'name': sfnt.name_table(family), 'post': struct.pack('>IIhhIIIII', 0x30000, 0, -asc // 4, 400, 0, 0, 0, 0, 0)}
         tables['OS/2'] = self.os2(asc, desc, pairs, gx1)
-        if adjust: tables['GPOS'] = sfnt.build_gpos(adjust)
+        if adjust and not spec.get('no_gpos'): tables['GPOS'] = sfnt.build_gpos(adjust, tuple(t.encode() for t in spec['gpos_features'])) if spec.get('gpos_features') else sfnt.build_gpos(adjust)
         self.sizes = {k: len(v) for k, v in tables.items()}
         self.short_loca = short
         return sfnt.build_sfnt(tables)
@@ -356,7 +361,12 @@ def blank_font(ranges=((0xE000, 0xF8FF), (0xF0000, 0xFFFFD)), name='KaTeXMathBla
 def brotli_cli(data):
     """Brotli at quality 11 with the largest window through the `brotli` command line tool ($BROTLI or PATH)."""
     exe = os.environ.get('BROTLI', 'brotli')
-    return subprocess.run([exe, '-q', '11', '-w', '24', '-c'], input=data, stdout=subprocess.PIPE, check=True).stdout
+    try:
+        return subprocess.run([exe, '-q', '11', '-w', '24', '-c'], input=data, stdout=subprocess.PIPE, check=True).stdout
+    except FileNotFoundError:
+        sys.exit("gen_math_font.py: the brotli command line tool is needed for the WOFF 2 output and was not found (%r). Install the "
+                 "distribution package `brotli` (Google's reference CLI) or set BROTLI=/path/to/brotli. It is a build-time tool only: the "
+                 "generated .woff2 is checked in." % exe)
 
 
 def build(fonts_dir, spec, outdir, name):
@@ -372,20 +382,23 @@ def build(fonts_dir, spec, outdir, name):
     b.allocate()
     ttf = b.compile(name)
     os.makedirs(outdir, exist_ok=True)
-    p = os.path.join(outdir, name)
+    tmp = os.path.join(outdir, name)
+    write_map(b, tmp + '.map.json', name)
+    # the version is a hash of what the encoder depends on (code points and advances), part of the file and family name
+    ver = hashlib.sha256(open(tmp + '.map.json', 'rb').read()).hexdigest()[:8]
+    stem = '%s-%s' % (name, ver)
+    p = os.path.join(outdir, stem)
+    os.replace(tmp + '.map.json', p + '.map.json')
     open(p + '.ttf', 'wb').write(ttf)
     open(p + '.woff', 'wb').write(sfnt.to_woff1(ttf))
-    try:
-        open(p + '.woff2', 'wb').write(sfnt.to_woff2(ttf, brotli_cli, transform=True))
-        open(p + '.untransformed.woff2', 'wb').write(sfnt.to_woff2(ttf, brotli_cli, transform=False))
-    except (OSError, subprocess.CalledProcessError):
-        pass
+    open(p + '.woff2', 'wb').write(sfnt.to_woff2(ttf, brotli_cli, transform=True))
+    open(p + '.untransformed.woff2', 'wb').write(sfnt.to_woff2(ttf, brotli_cli, transform=False))
     blank = blank_font()
-    open(p + '-blank.ttf', 'wb').write(blank)
-    try: open(p + '-blank.woff2', 'wb').write(sfnt.to_woff2(blank, brotli_cli, transform=True))
-    except (OSError, subprocess.CalledProcessError): pass
-    write_map(b, p + '.map.json', name)
-    open(p + '.css', 'w').write(css_snippet(name, base64.b64encode(sfnt.to_woff2(blank, brotli_cli, transform=True)).decode()))
+    bp = os.path.join(outdir, 'KaTeXMathBlank')
+    open(bp + '.ttf', 'wb').write(blank)
+    open(bp + '.woff2', 'wb').write(sfnt.to_woff2(blank, brotli_cli, transform=True))
+    open(p + '.css', 'w').write(css_snippet(stem))
+    b.version = ver; b.stem = stem
     return b, ttf
 
 
@@ -419,15 +432,13 @@ def write_map(b, path, name):
     json.dump(m, open(path, 'w'), separators=(',', ':'))
 
 
-def css_snippet(name, blank_b64=''):
-    """The @font-face rules and the classes the markup needs. --h/--d are the formula's height and depth in em of its own size
-    (KaTeX's strut), set inline per formula; the ::before only matters for formulas taller than the line. The blank face
-    (inline, 344 bytes of WOFF 2) makes the private-use spacers draw nothing while the real font loads or if it fails."""
-    return ("@font-face { font-family: %s; src: url(%s.woff2) format('woff2'); font-display: swap; }\n"
-            "@font-face { font-family: %sBlank; src: url(data:font/woff2;base64,%s) format('woff2'); unicode-range: U+E000-F8FF, U+F0000-FFFFD; }\n"
-            ".mf { font: normal 1.21em/0 %s, %sBlank; white-space: nowrap; text-indent: 0; text-rendering: geometricPrecision; letter-spacing: normal; }\n"
-            ".mf::before { content: ''; display: inline-block; height: calc(var(--h, 0em) + var(--d, 0em)); vertical-align: calc(-1 * var(--d, 0em)); }\n"
-            ".katex-display > .mf { display: block; text-align: center; }\n" % (name, name, name, blank_b64, name, name))
+def css_snippet(stem):
+    """Reference CSS for the font (the Rust encoder's `mathrun::font_css` writes the same rules plus the strut classes). --h/--v are
+    the formula's strut: its height and its vertical-align, in em of the formula."""
+    return ("@font-face { font-family: %s; src: url(%s.woff2) format('woff2'); font-display: block; }\n"
+            ".mf { font: normal 1.21em/0 %s; white-space: nowrap; text-indent: 0; text-rendering: geometricPrecision; letter-spacing: normal; }\n"
+            ".mf::before { content: ''; display: inline-block; height: var(--h); vertical-align: var(--v); }\n"
+            ".katex-display > .mf { display: block; text-align: center; }\n" % (stem, stem, stem))
 
 
 def main():
@@ -437,7 +448,7 @@ def main():
     a = ap.parse_args()
     spec = json.load(open(a.spec)) if a.spec else {}
     b, ttf = build(a.fonts, spec, a.out, a.name)
-    print('glyphs', len(b.ordered) + 1, 'ttf', len(ttf), 'tables', b.sizes, 'cmap groups', b.cmap_groups, 'stats', b.stats)
+    print('version', b.version, 'glyphs', len(b.ordered) + 1, 'ttf', len(ttf), 'tables', b.sizes, 'cmap groups', b.cmap_groups, 'stats', b.stats)
 
 
 if __name__ == '__main__':
