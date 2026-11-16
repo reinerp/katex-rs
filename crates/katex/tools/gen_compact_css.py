@@ -86,6 +86,10 @@ def main():
         out.append('@font-face{font-family:%s;src:url(%s%s)format("woff2");%s%sfont-display:block}' % (
             fam, fonts, file_, 'font-weight:%s;' % weight.group(1) if weight else '',
             'font-style:%s;' % style.group(1) if style else ''))
+    # `KM`: the family of a formula that is not in spans of fonts. Later faces win where ranges overlap.
+    out.append('@font-face{font-family:KM;src:url(%sKaTeX_Main-Regular.woff2)format("woff2");font-weight:normal;font-style:normal;font-display:block}' % fonts)
+    out.append('@font-face{font-family:KM;src:url(%sKaTeX_Math-Italic.woff2)format("woff2");font-weight:normal;font-style:normal;font-display:block;unicode-range:U+41-5A,U+61-7A,U+131,U+237,U+3B1-3C9,U+3D1,U+3D5,U+3D6,U+3F1,U+3F5}' % fonts)
+    out.append('@font-face{font-family:KM;src:url(%sKaTeX_Compact-Space.ttf)format("truetype");font-weight:normal;font-style:normal;font-display:block;unicode-range:U+2002,U+2003,U+2004,U+2006,U+200A,U+205F}' % fonts)
     rest = re.sub(r'@font-face\s*\{.*?\}', '', css, flags=re.S)
     for sel, body in re.findall(r'([^{}]+)\{([^{}]*)\}', rest):
         sels = [s.strip() for s in sel.split(',')]
@@ -117,6 +121,12 @@ def main():
                     extra.append(x)
                     if '.vlist-t' in s:
                         extra.append(x.replace('.X', '.Y'))
+        if sels == ['.katex .textbf']:
+            body += ';font-family:KaTeX_Main'
+        elif sels == ['.katex .textit']:
+            body += ';font-family:KaTeX_Main'
+        elif sels == ['.katex .mathrm']:
+            body += ';font-family:KaTeX_Main'
         out.append(minify(','.join(sels + extra) + '{' + body + '}'))
     out.append('.katex .X,.katex .Y{display:inline-block;contain:layout;position:relative}')
     out.append('.katex .Y>span{display:inline-block}')
@@ -128,6 +138,11 @@ def main():
     # A formula without bases: `.f`, or `.tN` for a strut that has a class, is `nowrap` (as its
     # bases were) and the strut is a pseudo-element of the formula itself.
     out.append(','.join(['.katex.f'] + ['.katex.t%s' % b36(i) for i in range(len(fstruts))]) + '{white-space:nowrap}')
+    # K: a formula in the family. L: also with the line box of a Math-Italic span at the formula's size,
+    # which the letters that are no longer in spans gave the line.
+    out.append('.katex.K,.katex.L{font-family:KM,KaTeX_Main,Times New Roman,serif;text-rendering:geometricPrecision}')
+    out.append('.katex.L::after{content:"\\200b";font-family:KaTeX_Math;font-style:italic}')
+    out.append('.katex .E{font-family:KaTeX_Main;font-style:normal}')
     out.append('.katex.f::before{content:"";display:inline-block;height:var(--h);vertical-align:var(--v,0)}')
     for i, (h, v) in enumerate(fstruts):
         out.append('.katex.t%s::before{content:"";display:inline-block;height:%s;%s}' % (b36(i), h, 'vertical-align:%s' % v if v else ''))

@@ -71,8 +71,15 @@ pub mod levels {
     pub const SINGLE: u32 = 1 << 17;
     /// An empty spacing span is an ordinary inline element with a margin, not an inline block.
     pub const INLINE_GLUE: u32 = 1 << 18;
+    /// Letters that KaTeX sets in Math-Italic are not wrapped in spans: the formula's font family
+    /// (`KM`, from `unicode-range` faces) has Math-Italic for letters and Main for the rest.
+    /// Text that KaTeX sets in Main and that has letters gets a `E` span. Needs [`FLAT`].
+    pub const COMPOSITE: u32 = 1 << 19;
+    /// Common spaces between atoms are space characters of a font that only has their widths,
+    /// not margins of spans. Needs [`COMPOSITE`].
+    pub const SPACERS: u32 = 1 << 20;
     /// Every step.
-    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE;
+    pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE | COMPOSITE | SPACERS;
     /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
     ///
     /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
@@ -419,6 +426,7 @@ const FONT: &[&str] = &[
     "mathitsf",
     "textitsf",
     "mainrm",
+    "E",
     "textbf",
     "textit",
     "textrm",
@@ -489,6 +497,11 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
     } else {
         None
     };
+    let composite = strut.is_some() && levels & levels::COMPOSITE != 0;
+    let mut math_box = false;
+    if composite && let Some(katex) = katex_mut(root) {
+        math_box = km_pass(katex, false, levels & levels::SPACERS != 0, true);
+    }
     if levels & levels::SINGLE != 0 && levels & levels::VLIST != 0 {
         single_pass(root, false, levels, rounding);
     }
@@ -509,6 +522,9 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
     if let Some((height, align)) = strut
         && let Some(katex) = katex_mut(root)
     {
+        if composite {
+            katex.classes.push(if math_box { "L" } else { "K" }.to_owned());
+        }
         let table_class = if levels & levels::PSEUDO != 0 {
             pseudo_class(FSTRUTS, "t", &height, &align)
         } else {
@@ -755,6 +771,92 @@ fn flatten(root: &mut El) -> Option<(String, String)> {
     }
     katex.kids = kids;
     Some((height, align))
+}
+
+/// The letters that the `KM` family sets in Math-Italic (the `unicode-range` of its face): the
+/// code points that KaTeX sets in the `mathnormal` font.
+fn km_math(c: char) -> bool {
+    matches!(c, 'A'..='Z' | 'a'..='z' | '\u{131}' | '\u{237}' | '\u{3b1}'..='\u{3c9}'
+        | '\u{3d1}' | '\u{3d5}' | '\u{3d6}' | '\u{3f1}' | '\u{3f5}')
+}
+
+/// Classes that set a font family of their own, apart from those of [`FONT`].
+const OTHER_FAMILY: &[&str] = &["delimsizing", "op-symbol", "delim-size1", "delim-size4"];
+
+/// A space (a margin-right of an empty spacing span) that the spacer font has a character for.
+fn spacer(value: &str) -> Option<&'static str> {
+    Some(match em4(value)? {
+        2778 => "\u{2004}",
+        2222 => "\u{205f}",
+        1667 => "\u{2006}",
+        10000 => "\u{2003}",
+        20000 => "\u{2003}\u{2003}",
+        5000 => "\u{2002}",
+        556 => "\u{200a}",
+        _ => return None,
+    })
+}
+
+/// Writes the formula so that it is in the `KM` family where that is what KaTeX has.
+///
+/// `explicit`: an ancestor sets a font family (or style, or weight) of its own, so that the text
+/// is not in the formula's family. A span that only sets Math-Italic around letters of the
+/// family's Math-Italic range does not need to; text KaTeX sets in Main (it has no class) that
+/// has a letter would be Math-Italic in the family, so it gets a Main span. Spaces are characters
+/// of the spacer font in the family.
+fn km_pass(el: &mut El, explicit: bool, spacers: bool, top: bool) -> bool {
+    let mut dropped = false;
+    let mut explicit_here = explicit;
+    let mut math = false;
+    if !explicit {
+        let others = el
+            .classes
+            .iter()
+            .any(|c| (FONT.contains(&c.as_str()) && c != "mathnormal") || OTHER_FAMILY.contains(&c.as_str()));
+        if others {
+            explicit_here = true;
+        } else if el.has("mathnormal") {
+            math = true;
+            if el.tag == Tag::Span
+                && !el.kids.is_empty()
+                && el.kids.iter().all(|k| matches!(k, Node::Text(t) if t.chars().all(km_math)))
+            {
+                el.classes.retain(|c| c != "mathnormal");
+                dropped = top;
+            } else {
+                explicit_here = true;
+            }
+        }
+    }
+    let mut kids = Vec::with_capacity(el.kids.len());
+    for kid in mem::take(&mut el.kids) {
+        match kid {
+            Node::Text(t) if !explicit_here && !math && t.chars().any(km_math) => {
+                kids.push(Node::El(span(&["E"], Vec::new(), vec![Node::Text(t)])));
+            }
+            Node::El(mut child) => {
+                if spacers && !explicit_here && glue_of_el(&child)
+                    && let Some(ch) = child.get_style("margin-right").and_then(spacer)
+                {
+                    kids.push(Node::Text(ch.to_owned()));
+                    continue;
+                }
+                // Only what is in the formula's own line, in its own size, takes part in the line
+                // that holds the formula.
+                let inline = top
+                    && child.tag == Tag::Span
+                    && child
+                        .classes
+                        .iter()
+                        .all(|c| DEAD.contains(&c.as_str()) || c == "mathnormal" || c == "E");
+                dropped |= km_pass(&mut child, explicit_here, spacers, inline);
+                kids.push(Node::El(child));
+            }
+            other => kids.push(other),
+        }
+    }
+    el.kids = kids;
+    dropped
 }
 
 /// KaTeX's size multipliers: `size1` to `size11`.

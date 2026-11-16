@@ -20,7 +20,7 @@ for line in open(a[0]):
     j = json.loads(line)
     if 'html' not in j or (even and j['id'] % 2): continue
     h = j['html']
-    for m in re.finditer(r'<span class="katex f"[^>]*? style="([^"]*)"', h):
+    for m in re.finditer(r'<span class="katex [KL ]*f"[^>]*? style="([^"]*)"', h):
         d = dict(x.split(':', 1) for x in m.group(1).split(';') if ':' in x)
         struts[(d['--h'], d.get('--v', ''))] += 1
     for m in re.finditer(r' style="([^"]*line-height:0[^"]*)"', h):
