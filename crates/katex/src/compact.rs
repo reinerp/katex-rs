@@ -17,6 +17,7 @@ use core::mem;
 
 use crate::ParseError;
 use crate::dom_tree::{DomSpan, HtmlDomNode, SvgChildNode};
+use crate::mathrun;
 use crate::svg_geometry::PATH_MAP;
 use crate::types::{ParseErrorKind, Settings};
 use crate::units::make_em;
@@ -73,6 +74,12 @@ pub mod levels {
     pub const INLINE_GLUE: u32 = 1 << 18;
     /// Every step.
     pub const ALL: u32 = CLASSIC | FLAT | SINGLE | INLINE_GLUE;
+    /// Text nodes of glyphs of a generated font in place of what it can express (`crate::mathrun`).
+    ///
+    /// Symbols, space and kerns, italic corrections and scripts (also stacked) that the font has become one text node of its
+    /// code points; what it cannot express stays markup as the other steps write it, and its children are treated the same way.
+    /// Needs [`FLAT`] and [`UNWRAP_HTML`]. Not in [`ALL`]: the page must serve the font and `mathrun::stylesheet`.
+    pub const FONT_RUN: u32 = 1 << 19;
     /// Round the vertical extents too (`height`, `padding-top`, `vertical-align`).
     ///
     /// They set how tall a formula is in a line of text; with a precision set, only margins, offsets and
@@ -371,6 +378,22 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     if !is_katex {
         return None;
     }
+    // `FONT_RUN`: glyph runs in the generated font in place of what it can express (see `mathrun`).
+    let hybrid = (settings.compact_levels & levels::FONT_RUN != 0
+        && settings.compact_levels & levels::FLAT != 0
+        && settings.compact_levels & levels::UNWRAP_HTML != 0)
+        .then(|| mathrun::transform(root, settings))
+        .flatten();
+    let local;
+    let (root, settings) = if let Some(h) = &hybrid {
+        local = Settings {
+            compact_wrap_min: h.wrap_min,
+            ..settings.clone()
+        };
+        (&h.root, &local)
+    } else {
+        (root, settings)
+    };
     let rounding = Rounding {
         sf: settings.compact_precision,
         extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
@@ -379,7 +402,7 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     else {
         return None;
     };
-    rewrite(&mut el, settings, rounding);
+    rewrite(&mut el, settings, rounding, hybrid.is_some());
     let mut out = String::new();
     write_el(
         &mut out,
@@ -482,7 +505,7 @@ enum Role {
     Table,
 }
 
-fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
+fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding, font: bool) {
     let levels = settings.compact_levels;
     if levels & levels::UNWRAP_HTML != 0 && !settings.fleqn {
         unwrap_html(root, settings.compact_label);
@@ -523,6 +546,9 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding) {
             align,
             needed,
         } = strut;
+        if font {
+            katex.classes.push("mf".to_owned());
+        }
         let table_class = if needed && levels & levels::PSEUDO != 0 {
             pseudo_class(FSTRUTS, "t", &height, &align)
         } else {
@@ -651,7 +677,7 @@ fn walk(el: &mut El, role: Role, levels: u32) {
 }
 
 /// Ten-thousandths of an em of a number KaTeX wrote (`-0.25em`, `1.5em`, `0`), or `None`.
-fn em4(value: &str) -> Option<i64> {
+pub(crate) fn em4(value: &str) -> Option<i64> {
     let n = value.strip_suffix("em").unwrap_or(value);
     let (neg, n) = n.strip_prefix('-').map_or((false, n), |r| (true, r));
     let (int, frac) = n.split_once('.').unwrap_or((n, ""));
@@ -672,7 +698,7 @@ fn em4(value: &str) -> Option<i64> {
     Some(if neg { -x } else { x })
 }
 
-fn em_str(x: i64) -> String {
+pub(crate) fn em_str(x: i64) -> String {
     make_em(x as f64 / 10_000.0)
 }
 
@@ -1436,7 +1462,7 @@ fn strut_to_pseudo(base: &mut El) {
 }
 
 /// The class of a `::before` whose height (and vertical alignment) the stylesheet has.
-fn pseudo_class(table: &[(&str, &str)], prefix: &str, height: &str, align: &str) -> Option<String> {
+pub(crate) fn pseudo_class(table: &[(&str, &str)], prefix: &str, height: &str, align: &str) -> Option<String> {
     let height = trim_number(height);
     let align = trim_number(align);
     let i = table
@@ -1445,7 +1471,7 @@ fn pseudo_class(table: &[(&str, &str)], prefix: &str, height: &str, align: &str)
     Some(format!("{prefix}{}", base36(i)))
 }
 
-fn base36(mut n: usize) -> String {
+pub(crate) fn base36(mut n: usize) -> String {
     let mut digits = Vec::new();
     loop {
         digits.push(char::from_digit((n % 36) as u32, 36).unwrap_or('0'));
@@ -1680,7 +1706,7 @@ fn write_el(out: &mut String, el: &El, levels: u32, limit: usize) -> Result<(), 
 }
 
 /// `0.5em` as `.5em`, `-0.25em` as `-.25em`, `0em` as `0`.
-fn trim_number(value: &str) -> String {
+pub(crate) fn trim_number(value: &str) -> String {
     if let Some(n) = value.strip_suffix("em") {
         let (sign, digits) = n.strip_prefix('-').map_or(("", n), |d| ("-", d));
         let plain = digits.bytes().all(|b| b.is_ascii_digit() || b == b'.')
@@ -1913,7 +1939,7 @@ const PSTRUTS: &[(&str, &str)] = &[
 /// The struts of a formula without bases (height, vertical-align): the class is `t` and the
 /// position in base 36. Generated from the corpus by `tools/gen_compact_flat.py`.
 // FSTRUTS-BEGIN
-const FSTRUTS: &[(&str, &str)] = &[
+pub(crate) const FSTRUTS: &[(&str, &str)] = &[
     ("1em", "-.25em"),
     (".8141em", ""),
     (".8889em", "-.1944em"),

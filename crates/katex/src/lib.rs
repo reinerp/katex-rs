@@ -28,6 +28,7 @@ pub mod functions;
 pub mod lexer;
 pub mod macro_expander;
 pub mod macros;
+pub mod mathrun;
 pub mod mathml_tree;
 pub mod options;
 /// Utilities for working with parse trees and converting them to ParseNode
