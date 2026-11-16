@@ -1,0 +1,406 @@
+{
+ "default": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "font-kerning:none": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "text-rendering:optimizeSpeed": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "text-rendering:geometricPrecision": [
+  [
+   "real a,b (ab)",
+   42.25
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42.25
+  ],
+  [
+   "twins A,B (AB)",
+   42.25
+  ],
+  [
+   "twins A,-adv(A),B",
+   22.25
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22.234375
+  ],
+  [
+   "twins A,+1em,B",
+   82.25
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   87.125
+  ]
+ ],
+ "letter-spacing:1px": [
+  [
+   "real a,b (ab)",
+   44
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   30
+  ],
+  [
+   "twins A,B (AB)",
+   44
+  ],
+  [
+   "twins A,-adv(A),B",
+   30
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   32
+  ],
+  [
+   "twins A,+1em,B",
+   89
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   97
+  ]
+ ],
+ "font-variant-ligatures:none": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "font-feature-settings:\"kern\" 0": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "font-feature-settings:\"kern\" 0, \"dist\" 0": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "word-spacing:10px": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   22
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "font-synthesis:none": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "direction:rtl": [
+  [
+   "real a,b (ab)",
+   42
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   42
+  ],
+  [
+   "twins A,B (AB)",
+   42
+  ],
+  [
+   "twins A,-adv(A),B",
+   22
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   22
+  ],
+  [
+   "twins A,+1em,B",
+   82
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   86
+  ]
+ ],
+ "writing-mode:vertical-rl": [
+  [
+   "real a,b (ab)",
+   60
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   60
+  ],
+  [
+   "twins A,B (AB)",
+   60
+  ],
+  [
+   "twins A,-adv(A),B",
+   60
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   60
+  ],
+  [
+   "twins A,+1em,B",
+   60
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   60
+  ]
+ ],
+ "zoom:1.5 / transform scale": [
+  [
+   "real a,b (ab)",
+   63
+  ],
+  [
+   "real a,-adv(a),b (clamped)",
+   63
+  ],
+  [
+   "twins A,B (AB)",
+   63
+  ],
+  [
+   "twins A,-adv(A),B",
+   33
+  ],
+  [
+   "twins A,-adv/2,-adv/2,B",
+   33
+  ],
+  [
+   "twins A,+1em,B",
+   123
+  ],
+  [
+   "twins mix with Math-Italic and digit",
+   130
+  ]
+ ],
+ "lines in 60px box, no nowrap": {
+  "PUA letters x8 (white-space:normal)": 1,
+  "same with overflow-wrap:anywhere": 4,
+  "same with word-break:break-all": 4,
+  "same with white-space:nowrap": 1,
+  "ASCII punctuation a+b-c/d,e;f!g?h (normal)": 3,
+  "with U+200B between a/b pairs": 4,
+  "with U+200B and nowrap": 1,
+  "ZWSP between, overflow-wrap:anywhere not set, 2 chars width": 4
+ },
+ "copy text of \"a ..spacers.. x a b\"": "U+61 U+ED40 U+ED3F U+ED3C U+E012 U+E00F U+E00D U+E00C U+1D465 U+61 U+62",
+ "window.find(\"b\") finds a letter of the formula": true,
+ "window.find ASCII letter that is in the formula (a)": "f",
+ "caret/double click word": "see selection.png"
+}

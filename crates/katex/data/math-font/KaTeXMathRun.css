@@ -1,0 +1,5 @@
+@font-face { font-family: KaTeXMathRun; src: url(KaTeXMathRun.woff2) format('woff2'); font-display: swap; }
+@font-face { font-family: KaTeXMathRunBlank; src: url(data:font/woff2;base64,d09GMgABAAAAAAFYAAoAAAAAAwAAAAENAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAANAocNgE2AiRDCAULBgAEIAWBdgcgH14CAC4G7MblhpIa+dffiPGEWikUpV5/mXie2u937u6imjSalCra8JLITNcQSZFIiS/+6VjDfucr0/KmlV1JkvXKhegp3w+AxuHh7NcAvPX/4H95HGHwOIWIuvADDkAjnA5tggPDuY2Bw6dEUo02NPKmj7luNjK159nRx7wN3bOtfMJH93eVUVf4RGDifa7DiiCqYYwaA6uAQoe/iQlM/E9AAQ1BQx+ggdBG+sbavm8CgjBwMe3uJqzWHgAA8lXEoALCDytfdDGASh0TFJEOAUTQ79hKGxILZIpxC1S71mkWXNJn3sPr91vwdIDMGvCG39CV2P+Nu11Cp3Iej+2mC27/5lGxZ9uuZJXsv30AAAA=) format('woff2'); unicode-range: U+E000-F8FF, U+F0000-FFFFD; }
+.mf { font: normal 1.21em/0 KaTeXMathRun, KaTeXMathRunBlank; white-space: nowrap; text-indent: 0; text-rendering: geometricPrecision; letter-spacing: normal; }
+.mf::before { content: ''; display: inline-block; height: calc(var(--h, 0em) + var(--d, 0em)); vertical-align: calc(-1 * var(--d, 0em)); }
+.katex-display > .mf { display: block; text-align: center; }

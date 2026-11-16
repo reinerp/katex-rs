@@ -1,0 +1,17 @@
+M3 base only             glyphs   622 variants     0 ttf   87568 woff   52532 woff2u   48804 woff2   43068 zstd19   51129 br11   48942 | font-only formulas 972/2254 (43.1%) glyphs 67.3%
+M3 p2                    glyphs  1100 variants   478 ttf   99996 woff   58524 woff2u   52836 woff2   45960 zstd19   56344 br11   52904 | font-only formulas 1853/2254 (82.2%) glyphs 82.4%
+M3 p8                    glyphs  2087 variants  1465 ttf  125656 woff   68840 woff2u   58160 woff2   50684 zstd19   64182 br11   58302 | font-only formulas 1920/2254 (85.2%) glyphs 87.0%
+M3 p16                   glyphs  2698 variants  2076 ttf  141424 woff   75416 woff2u   63060 woff2   54356 zstd19   69864 br11   63327 | font-only formulas 1938/2254 (86.0%) glyphs 89.9%
+M3+AMSsub p16            glyphs  2745 variants  2076 ttf  161192 woff   85720 woff2u   70488 woff2   61680 zstd19   76476 br11   70514 | font-only formulas 1946/2254 (86.3%) glyphs 89.9%
+R(+Size2-4) p16          glyphs  2851 variants  2076 ttf  174512 woff   93424 woff2u   77464 woff2   67376 zstd19   84387 br11   77567 | font-only formulas 1948/2254 (86.4%) glyphs 90.2%
+R p16 +accents +rules    glyphs  3331 variants  2076 ttf  189872 woff   97732 woff2u   80264 woff2   69432 zstd19   86599 br11   80231 | font-only formulas 1948/2254 (86.4%) glyphs 90.3%
+R p64 (closure 16)       glyphs  3763 variants  2508 ttf  201968 woff  102840 woff2u   84084 woff2   72816 zstd19   90310 br11   83854 | font-only formulas 2000/2254 (88.7%) glyphs 97.4%
+M4 base only             glyphs   879 variants     0 ttf  148708 woff   85328 woff2u   76884 woff2   67532 zstd19   80912 br11   76858 | font-only formulas 974/2254 (43.2%) glyphs 67.3%
+M4 p8 (closure 2)        glyphs  1553 variants   674 ttf  167580 woff   93740 woff2u   82256 woff2   71896 zstd19   87714 br11   82443 | font-only formulas 1928/2254 (85.5%) glyphs 87.1%
+M4 p8 all closure        glyphs  2344 variants  1465 ttf  189728 woff  101876 woff2u   86024 woff2   75412 zstd19   92663 br11   86086 | font-only formulas 1928/2254 (85.5%) glyphs 87.1%
+M4 p32 (closure 2)       glyphs  1919 variants  1040 ttf  177708 woff   98472 woff2u   85360 woff2   74748 zstd19   91381 br11   85579 | font-only formulas 1965/2254 (87.2%) glyphs 93.8%
+M7 p8 (closure 2)        glyphs  1659 variants   674 ttf  180900 woff  101420 woff2u   89256 woff2   77640 zstd19   95037 br11   89214 | font-only formulas 1929/2254 (85.6%) glyphs 87.4%
+FULL base only           glyphs  2382 variants     0 ttf  420552 woff  256384 woff2u  232596 woff2  204260 zstd19  245078 br11  232410 | font-only formulas 992/2254 (44.0%) glyphs 68.7%
+FULL p8 (closure 2)      glyphs  3059 variants   677 ttf  439508 woff  265388 woff2u  237756 woff2  208880 zstd19  252843 br11  237853 | font-only formulas 1972/2254 (87.5%) glyphs 88.5%
+FULL p64 (closure 4)     glyphs  4541 variants  1679 ttf  482804 woff  281592 woff2u  248060 woff2  217040 zstd19  263631 br11  247784 | font-only formulas 2046/2254 (90.8%) glyphs 98.5%
+done
