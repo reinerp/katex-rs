@@ -265,6 +265,11 @@ pub struct Settings {
     /// text's). A formula whose height and depth fit gets no strut of its own. `None`: unknown,
     /// every formula has its strut.
     pub compact_line: Option<(f64, f64)>,
+    /// Whether [`OutputFormat::CompactHtml`] writes the sizes it computes from the tree and the
+    /// font metrics (`crate::sizes`): `width` on every stack (`X`) whose width it can derive, and
+    /// the formula's sizes for [`crate::compact::take_sizes`]. Off by default; the output is then
+    /// exactly what it is without the option.
+    pub compact_sizes: bool,
 }
 
 /// Builder for [`Settings`], returned by [`Settings::builder`].
@@ -301,6 +306,7 @@ struct SettingsOptional {
     compact_precision: Option<u32>,
     compact_wrap_min: Option<usize>,
     compact_line: Option<(f64, f64)>,
+    compact_sizes: Option<bool>,
 }
 
 impl SettingsBuilder {
@@ -356,6 +362,8 @@ impl SettingsBuilder {
         compact_wrap_min / maybe_compact_wrap_min: usize;
         /// Ascent and descent of the host's line in em of the formula; formulas that fit get no strut.
         compact_line / maybe_compact_line: (f64, f64);
+        /// Whether the compact output writes the widths of stacks it can compute (`crate::sizes`).
+        compact_sizes / maybe_compact_sizes: bool;
     }
 
     /// Builds the [`Settings`] from the values set so far.
@@ -418,6 +426,7 @@ impl SettingsBuilder {
             compact_precision,
             compact_wrap_min,
             compact_line,
+            compact_sizes,
         } = self.opt;
         Settings {
             display_mode: display_mode.unwrap_or(false),
@@ -445,6 +454,7 @@ impl SettingsBuilder {
             compact_precision: compact_precision.unwrap_or(crate::compact::DEFAULT_PRECISION),
             compact_wrap_min: compact_wrap_min.unwrap_or(crate::compact::DEFAULT_WRAP_MIN),
             compact_line,
+            compact_sizes: compact_sizes.unwrap_or(false),
         }
     }
 }

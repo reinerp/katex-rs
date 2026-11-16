@@ -870,6 +870,19 @@ fn can_combine_symbols(prev: &SymbolNode, next: &SymbolNode) -> bool {
     prev.style == next.style
 }
 
+thread_local! {
+    /// Whether a symbol that absorbs the next one also takes its `width` (`Settings::compact_sizes`; off, the tree is KaTeX's).
+    static SUM_WIDTHS: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+}
+
+/// Runs `f` with [`push_combine_chars`] summing the widths of the symbols it combines if `on`.
+pub(crate) fn with_summed_widths<R>(on: bool, f: impl FnOnce() -> R) -> R {
+    let before = SUM_WIDTHS.with(|c| c.replace(on));
+    let result = f();
+    SUM_WIDTHS.with(|c| c.set(before));
+    result
+}
+
 /// Push a node into the vector, merging it into the previous symbol when
 /// possible.
 #[inline]
@@ -882,6 +895,10 @@ pub fn push_combine_chars(chars: &mut Vec<HtmlDomNode>, node: HtmlDomNode) {
                 prev_sym.height = prev_sym.height.max(next_sym.height);
                 prev_sym.depth = prev_sym.depth.max(next_sym.depth);
                 prev_sym.italic = next_sym.italic;
+                if SUM_WIDTHS.with(core::cell::Cell::get) {
+                    // KaTeX does not need the sum (its `width` is the first character's); `crate::sizes` does
+                    prev_sym.width += next_sym.width;
+                }
                 prev_sym.text.push_str(&next_sym.text);
             } else {
                 chars.push(HtmlDomNode::Symbol(next_sym));

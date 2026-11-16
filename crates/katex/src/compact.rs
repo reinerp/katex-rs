@@ -172,14 +172,21 @@ fn convert(node: &HtmlDomNode, depth: usize, sf: Rounding) -> Option<Node> {
             for child in &span.children {
                 push_node(&mut kids, convert(child, depth + 1, sf)?);
             }
+            let mut style: Vec<(&'static str, String)> = span
+                .style
+                .iter()
+                .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
+                .collect();
+            if let Some(w) = span.width
+                && span.classes.contains("vlist-t")
+            {
+                // `crate::sizes` computed it; `to_inline_block` makes it the `width` of the stack
+                style.push(("--sz", ceil_em(w)));
+            }
             Node::El(El {
                 tag: Tag::Span,
                 classes: span.classes.iter().map(str::to_owned).collect(),
-                style: span
-                    .style
-                    .iter()
-                    .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
-                    .collect(),
+                style,
                 attrs: span
                     .attributes
                     .iter()
@@ -371,6 +378,46 @@ fn push_node(kids: &mut Vec<Node>, node: Node) {
     }
 }
 
+thread_local! {
+    /// The sizes of the formula rendered last with [`Settings::compact_sizes`] on.
+    static LAST_SIZES: core::cell::RefCell<Option<crate::sizes::FormulaSizes>> = const { core::cell::RefCell::new(None) };
+}
+
+/// The sizes of the formula that this thread rendered last with [`Settings::compact_sizes`] on (and no other since).
+#[must_use]
+pub fn take_sizes() -> Option<crate::sizes::FormulaSizes> {
+    LAST_SIZES.with(|l| l.borrow_mut().take())
+}
+
+/// The `--sz` that [`convert`] gives a stack whose width is known and nothing took: removed.
+fn strip_sizes(el: &mut El) {
+    el.style.retain(|(p, _)| *p != "--sz");
+    for kid in &mut el.kids {
+        if let Node::El(child) = kid {
+            strip_sizes(child);
+        }
+    }
+}
+
+/// `em` rounded up to four decimals: a browser takes a length down to a layout unit, so a width that is too small by a
+/// hair makes a box that is a unit too narrow.
+fn ceil_em(v: f64) -> String {
+    let n = (v * 10_000.0 - 1e-7).ceil() / 10_000.0;
+    let text = format!("{n:.4}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    let text = text
+        .strip_prefix("0.")
+        .map_or_else(|| text.to_owned(), |r| format!(".{r}"));
+    format!(
+        "{}em",
+        if text.is_empty() || text == "-" {
+            "0"
+        } else {
+            &text
+        }
+    )
+}
+
 /// Renders `root` (the tree `build_tree` made for [`OutputFormat::CompactHtml`]) as compact
 /// markup, or `None` if the tree is not one this module handles.
 pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<String, ParseError>> {
@@ -398,11 +445,19 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
         sf: settings.compact_precision,
         extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
     };
-    let Node::El(mut el) = convert(&HtmlDomNode::DomSpan(root.clone()), 0, rounding)?
-    else {
+    // `compact_sizes`: the widths of the stacks, computed from the tree (see `crate::sizes`).
+    let mut tree = root.clone();
+    if settings.compact_sizes {
+        let sizes = crate::sizes::annotate(&mut tree, hybrid.is_some());
+        LAST_SIZES.with(|l| *l.borrow_mut() = Some(sizes));
+    }
+    let Node::El(mut el) = convert(&HtmlDomNode::DomSpan(tree), 0, rounding)? else {
         return None;
     };
     rewrite(&mut el, settings, rounding, hybrid.is_some());
+    if settings.compact_sizes {
+        strip_sizes(&mut el);
+    }
     let mut out = String::new();
     write_el(
         &mut out,
@@ -1045,7 +1100,7 @@ fn merge_item(x: &mut El) {
         && x.attrs.is_empty()
         && x.style
             .iter()
-            .all(|(p, _)| matches!(*p, "padding-top" | "height" | "vertical-align")))
+            .all(|(p, _)| matches!(*p, "padding-top" | "height" | "vertical-align" | "width")))
     {
         return;
     }
@@ -1066,6 +1121,27 @@ fn merge_item(x: &mut El) {
     x.classes.insert(0, "Y".to_owned());
     // The wrapper's `W` is `Y` itself: `Y::before` is the pstrut.
     x.classes.extend(wrapper.classes.drain(1..));
+    // The item's margins were inside the stack's width; on the merged element they are outside it.
+    let margins: Option<f64> = wrapper
+        .style
+        .iter()
+        .filter(|(p, _)| matches!(*p, "margin-left" | "margin-right"))
+        .map(|(_, v)| v.strip_suffix("em").and_then(|n| n.parse::<f64>().ok()))
+        .sum::<Option<f64>>();
+    if let Some(i) = x.style.iter().position(|(p, _)| *p == "width") {
+        match (
+            margins,
+            x.style[i]
+                .1
+                .strip_suffix("em")
+                .and_then(|n| n.parse::<f64>().ok()),
+        ) {
+            (Some(m), Some(w)) => x.style[i].1 = ceil_em(w - m),
+            _ => {
+                x.style.remove(i);
+            }
+        }
+    }
     x.style.append(&mut wrapper.style);
     x.kids = wrapper.kids;
 }
@@ -1345,7 +1421,7 @@ fn to_inline_block(table: &mut El) {
         .collect();
     if rows.len() != table.kids.len()
         || !(1..=2).contains(&rows.len())
-        || !table.style.is_empty()
+        || !table.style.iter().all(|(p, _)| *p == "--sz")
         || !table.attrs.is_empty()
         || !table
             .classes
@@ -1401,6 +1477,9 @@ fn to_inline_block(table: &mut El) {
             .map_or_else(|| format!("-{d}"), str::to_owned);
         style.push(("height", d));
         style.push(("vertical-align", lowered));
+    }
+    if let Some((_, w)) = table.style.iter().find(|(p, _)| *p == "--sz") {
+        style.push(("width", w.clone()));
     }
     table.classes = vec!["X".to_owned()];
     table.style = style;

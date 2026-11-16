@@ -727,7 +727,7 @@ fn count_chars(node: &HtmlDomNode) -> usize {
     }
 }
 
-fn run_node(cps: &[u32]) -> HtmlDomNode {
+fn run_node(cps: &[u32], width: f64) -> HtmlDomNode {
     let text: String = cps.iter().filter_map(|c| char::from_u32(*c)).collect();
     HtmlDomNode::Symbol(SymbolNode {
         is_text_ord: false,
@@ -736,7 +736,8 @@ fn run_node(cps: &[u32]) -> HtmlDomNode {
         depth: 0.0,
         italic: 0.0,
         skew: 0.0,
-        width: 0.0,
+        // the run's advance, in em of the element that holds it (for `crate::sizes`)
+        width,
         max_font_size: 0.0,
         classes: ClassList::default(),
         style: CssStyle::default(),
@@ -875,7 +876,7 @@ fn flush(
         return;
     }
     if let Some(cps) = encode_best(&glyphs, offset) {
-        out.push(run_node(&cps));
+        out.push(run_node(&cps, offset));
     } else {
         out.extend(nodes[start..].iter().map(|(n, _)| emit(n, ctx, depth)));
     }

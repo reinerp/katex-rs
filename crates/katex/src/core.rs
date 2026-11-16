@@ -46,8 +46,11 @@ pub fn render_to_string(
     expression: &str,
     settings: &Settings,
 ) -> Result<String, ParseError> {
+    let sums = settings.compact_sizes && settings.output == OutputFormat::CompactHtml;
     let dom_tree = match parse_tree(ctx, expression, settings) {
-        Ok(tree) => match build_tree(ctx, &tree, expression, settings) {
+        Ok(tree) => match crate::build_common::with_summed_widths(sums, || {
+            build_tree(ctx, &tree, expression, settings)
+        }) {
             Ok(dom) => Ok(dom),
             Err(e) => {
                 if settings.throw_on_error {
