@@ -593,6 +593,9 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding, font: bool) {
     if levels & levels::INLINE_GLUE != 0 {
         inline_glue(root);
     }
+    if font && levels & levels::PSEUDO != 0 && let Some(katex) = katex_mut(root) {
+        char_breaks(katex);
+    }
     if let Some(strut) = strut
         && let Some(katex) = katex_mut(root)
     {
@@ -630,6 +633,16 @@ fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding, font: bool) {
             katex
                 .kids
                 .insert(0, Node::El(span(&["katex-strut"], style, Vec::new())));
+        }
+        if katex.has("mw") && !katex.has("w") {
+            // The strut of a formula that wraps at zero-width spaces is an element after its first segment (see `mathrun::stylesheet`).
+            if let Some(at) = katex
+                .kids
+                .iter()
+                .position(|k| matches!(k, Node::Text(t) if t == "\u{200b}"))
+            {
+                katex.kids.insert(at, Node::El(span(&["mu"], Vec::new(), Vec::new())));
+            }
         }
     }
 }
@@ -861,6 +874,57 @@ fn flatten(root: &mut El, wrap_min: usize, line: Option<(f64, f64)>) -> Option<S
         align,
         needed: !fits,
     })
+}
+
+/// A formula of text and inline spans, whose line breaks are `<wbr>` between its bases, has them as U+200B in its text instead.
+///
+/// With `white-space: normal` on the formula (the class `mw`) the zero-width space is the only place where it wraps, if nothing
+/// else can break: in a run of private-use code points nothing does, spaces of stock text are no-break spaces here, the
+/// spans are `white-space: nowrap` by the stylesheet (`mathrun::stylesheet`), and there is no inline block: a browser allows a
+/// break before and after one whatever else is there (a word joiner does not stop it before one), so a formula that has a
+/// stack, an SVG, a table ... keeps its `<wbr>` and `white-space: nowrap`. So does a formula with stock text that has an opening
+/// bracket, a hyphen or a question mark, or a character that is not ASCII (Chrome 156 breaks before a bracket that follows
+/// punctuation, after a hyphen, a question mark, a dash or an ellipsis: tried for every pair of ASCII punctuation marks, and
+/// for none of the others).
+fn char_breaks(katex: &mut El) -> bool {
+    let is_wbr = |k: &Node| matches!(k, Node::El(e) if e.tag == Tag::Wbr);
+    if !katex.kids.iter().any(is_wbr) || !katex.kids.iter().all(|k| is_wbr(k) || breakless(k)) {
+        return false;
+    }
+    for kid in &mut katex.kids {
+        if is_wbr(kid) {
+            *kid = Node::Text("\u{200b}".to_owned());
+        } else if let Node::Text(text) = kid {
+            *text = text.replace(' ', "\u{a0}");
+        }
+    }
+    katex.classes.push("mw".to_owned());
+    true
+}
+
+/// Text that has no break opportunity in it and spans that make none.
+fn breakless(node: &Node) -> bool {
+    match node {
+        Node::Text(text) => text.chars().all(|c| {
+            c.is_alphanumeric()
+                || c == '\u{a0}'
+                || ('\u{e000}'..='\u{f8ff}').contains(&c)
+                || (c.is_ascii_graphic() && !matches!(c, '(' | '[' | '{' | '-' | '?'))
+                || c == ' '
+        }),
+        Node::El(el) => {
+            el.tag == Tag::Span
+                && el.attrs.is_empty()
+                && el.classes.iter().all(|c| {
+                    DEAD.contains(&c.as_str()) || FONT.contains(&c.as_str()) || is_size_class(c) || c == "mspace"
+                })
+                && el.style.iter().all(|(p, v)| {
+                    matches!(*p, "margin-left" | "margin-right" | "vertical-align" | "line-height" | "color" | "top")
+                        || (*p == "position" && v == "relative")
+                })
+                && el.kids.iter().all(breakless)
+        }
+    }
 }
 
 /// A formula's strut: the height of its `::before`, and whether it needs one.

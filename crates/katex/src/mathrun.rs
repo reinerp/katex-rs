@@ -17,6 +17,15 @@
 //! as its code point, and where it is not where the previous glyph ends there are spacer glyphs, negative ones included
 //! (stacked scripts are one run: the superscript, a spacer back, the subscript).
 //!
+//! The gaps are not all spacers. The font has glyphs that carry TeX's spacing ([`BAKED`]: a binary operator with the medium
+//! space before and after it, a relation with the thick space, a comma with the thin space after it, and the one-sided
+//! versions; a glyph of a script with the script space after it) and spacers of the gaps that occur most (`NAMED`), and the
+//! binary ones only for the rest. Which of them a run uses is decided for the whole run (`encode`): the fewest code points,
+//! where a gap is written once, so that `a+b+c=d` is its seven glyphs. Every glyph is where it would be with spacers only.
+//!
+//! A formula that wraps has its line break opportunities between its bases written as U+200B in its text, when nothing in it
+//! can break by itself (`compact`, the class `mw`); the stylesheet lets such a formula wrap there and nowhere else.
+//!
 //! The formula's root then sets the font ([`stylesheet`]): the generated font first, the stock KaTeX font after it, so that
 //! characters that are not in the generated font (stock text, bold letters, ...) are drawn by the stock fonts of their
 //! classes as before. The generated font has only private-use code points, so a run is one script run: Chrome splits text
@@ -72,6 +81,23 @@ pub fn stylesheet(font_url: &str, blank_url: Option<&str>) -> String {
         css,
         ".katex.mf{{font-family:{first},KaTeX_Main,Times New Roman,serif;text-rendering:geometricPrecision;letter-spacing:normal}}"
     );
+    // A formula whose breaks are zero-width spaces (`mw`, see `compact`) wraps there and nowhere else (not where the page's
+    // `overflow-wrap: anywhere` or `word-break` would let a long segment break).
+    css.push_str(".katex.mf.mw{white-space:normal;overflow-wrap:normal;word-break:normal;line-break:auto}.katex.mf.mw span{white-space:nowrap}\n");
+    // The strut of such a formula is an element (`.mu`, an inline block) after its first segment, not the root's `::before`: a browser may
+    // break after an inline block, which would leave the strut at the end of the line before the text it is the strut of, or alone
+    // at the end of a line with the text on the next.
+    css.push_str(".katex.mf.mw::before{content:none}\n");
+    for line in compact.lines() {
+        if let Some(rest) = line.strip_prefix(".katex.")
+            && let Some((class, body)) =
+                rest.split_once("::before{content:\"\";display:inline-block;")
+            && !class.contains(' ')
+            && !class.contains(',')
+        {
+            let _ = writeln!(css, ".katex.mf.mw.{class}>.mu{{display:inline-block;{body}");
+        }
+    }
     // The classes that set a font family: the generated font stays first.
     for line in compact.lines() {
         if !line.starts_with(".katex ") || !line.contains("font-family:KaTeX_") {
@@ -152,6 +178,40 @@ pub fn collect_missing_variants<R>(f: impl FnOnce() -> R) -> (R, Vec<MissingVari
     let result = f();
     let missing = MISSING.with(|m| m.borrow_mut().take()).unwrap_or_default();
     (result, missing)
+}
+
+thread_local! {
+    /// Every run written while collecting: its glyphs and width, before they are code points.
+    static RUNS: RefCell<Option<Vec<RunRecord>>> = const { RefCell::new(None) };
+}
+
+thread_local! {
+    /// The distances that spacers were written for, in font units, while collecting.
+    static SPACES: RefCell<Option<Vec<i64>>> = const { RefCell::new(None) };
+}
+
+/// Runs `f` and returns what it returned with every distance a spacer was written for (before the spacers of a named glyph and
+/// binary ones were chosen): the data for choosing the named spacers of a font, `tools/mfgaps.py`.
+#[doc(hidden)]
+pub fn collect_spaces<R>(f: impl FnOnce() -> R) -> (R, Vec<i64>) {
+    SPACES.with(|m| *m.borrow_mut() = Some(Vec::new()));
+    let result = f();
+    let spaces = SPACES.with(|m| m.borrow_mut().take()).unwrap_or_default();
+    (result, spaces)
+}
+
+/// A run as the encoder got it: (font, character, size, shift, x) of each glyph in document order, in em of the element that
+/// holds the run, and the width of the run.
+pub type RunRecord = (Vec<(u8, u32, f64, f64, f64)>, f64);
+
+/// Runs `f` and returns what it returned with every run it wrote (for choosing the spacing glyphs of a font from a corpus:
+/// `tools/mfgaps.py`).
+#[doc(hidden)]
+pub fn collect_runs<R>(f: impl FnOnce() -> R) -> (R, Vec<RunRecord>) {
+    RUNS.with(|m| *m.borrow_mut() = Some(Vec::new()));
+    let result = f();
+    let runs = RUNS.with(|m| m.borrow_mut().take()).unwrap_or_default();
+    (result, runs)
 }
 
 /// `value` of `em`, or `None` if it is anything else.
@@ -565,10 +625,11 @@ fn popcount_cost(units: i64) -> usize {
     (n / max) as usize + (n % max).count_ones() as usize
 }
 
-/// Code points that move the cursor by `units`, to within `tol` (the rest as binary spacers); the amount moved.
-fn spacer(units: i64, tol: i64) -> (Vec<u32>, i64) {
+/// How to move the cursor by `units`, to within `tol`: the number of code points, the named spacer (its advance and code point)
+/// and the rest, which binary spacers write.
+fn spacer_plan(units: i64, tol: i64) -> (usize, i64, Option<u32>, i64) {
     if units.abs() <= tol {
-        return (Vec::new(), 0);
+        return (0, 0, None, 0);
     }
     let mut best: Option<(usize, i64, Option<u32>, i64)> = None;
     let candidates = std::iter::once((0i64, None)).chain(
@@ -589,10 +650,13 @@ fn spacer(units: i64, tol: i64) -> (Vec<u32>, i64) {
             best = Some((cost, n, cp, rem));
         }
     }
-    let Some((_, n, cp, rem)) = best else {
-        return (Vec::new(), 0);
-    };
-    let mut out = Vec::new();
+    best.unwrap_or((0, 0, None, 0))
+}
+
+/// Code points that move the cursor by `units`, to within `tol` (the rest as binary spacers); the amount moved.
+fn spacer(units: i64, tol: i64) -> (Vec<u32>, i64) {
+    let (cost, n, cp, rem) = spacer_plan(units, tol);
+    let mut out = Vec::with_capacity(cost);
     let mut moved = 0;
     if let Some(cp) = cp {
         out.push(cp);
@@ -644,8 +708,52 @@ fn units(em: f64) -> i64 {
     (em * UPEM as f64).round() as i64
 }
 
-/// Writes glyphs as code points, in document order or ordered by x.
-fn encode(glyphs: &[Glyph], width: f64, by_x: bool, alt: bool) -> Option<Vec<u32>> {
+/// A way to write a glyph: the code point, the gap it has before the glyph and the gap after it (both 0 for the glyph itself).
+#[derive(Clone, Copy)]
+struct Cand {
+    left: i64,
+    right: i64,
+    cp: u32,
+}
+
+/// The ways to write a glyph, appended to `out` (the plain glyph first, then the ones of [`BAKED`] that carry a gap), and the
+/// advance of the plain one.
+fn candidates(g: &Glyph, no_ic: bool, alt: bool, out: &mut Vec<Cand>) -> Option<i64> {
+    let (cp, adv) = lookup(g, no_ic, alt)?;
+    out.push(Cand {
+        left: 0,
+        right: 0,
+        cp,
+    });
+    if !no_ic && !alt {
+        let size = (g.size * 1000.0).round();
+        if (1.0..=65535.0).contains(&size) {
+            let key = (g.font, g.ch, size as u16);
+            let start = BAKED.partition_point(|e| (e.0, e.1, e.2) < key);
+            for e in BAKED.get(start..).unwrap_or_default() {
+                if (e.0, e.1, e.2) != key {
+                    break;
+                }
+                if (f64::from(e.3) / 1000.0 - g.y).abs() <= SHIFT_TOLERANCE {
+                    out.push(Cand {
+                        left: i64::from(e.4),
+                        right: i64::from(e.5),
+                        cp: e.6,
+                    });
+                }
+            }
+        }
+    }
+    Some(adv)
+}
+
+/// The number of code points that move the cursor by `units`.
+fn spacer_len(units: i64, tol: i64) -> usize {
+    spacer_plan(units, tol).0
+}
+
+/// The glyphs in the order they are written: document order, or ordered by x.
+fn ordered(glyphs: &[Glyph], by_x: bool) -> Vec<&Glyph> {
     let mut order: Vec<&Glyph> = glyphs.iter().collect();
     if by_x {
         let mut keyed: Vec<(usize, &Glyph)> = order.into_iter().enumerate().collect();
@@ -658,14 +766,23 @@ fn encode(glyphs: &[Glyph], width: f64, by_x: bool, alt: bool) -> Option<Vec<u32
         });
         order = keyed.into_iter().map(|(_, g)| g).collect();
     }
-    let mut out = Vec::with_capacity(order.len() * 2);
-    let mut cursor = 0i64;
+    order
+}
+
+/// Writes glyphs as code points, in document order or ordered by x, and the distances the spacers were asked for.
+///
+/// Every glyph is its plain glyph or a glyph of [`BAKED`] that carries the gap before it and after it. Which, is decided for the
+/// whole run: the fewest code points, a gap written once (a glyph that carries the gap after it leaves none to the next one).
+fn encode(order: &[&Glyph], width: f64, alt: bool) -> Option<(Vec<u32>, Vec<i64>)> {
     let tol = 1;
+    let n = order.len();
+    let mut xs = Vec::with_capacity(n);
+    let mut advs = Vec::with_capacity(n);
+    // the ways to write glyph i are cands[first[i]..first[i + 1]]
+    let mut cands: Vec<Cand> = Vec::with_capacity(n + 4);
+    let mut first = Vec::with_capacity(n + 1);
     for (pos, g) in order.iter().enumerate() {
         let xu = units(g.x);
-        let (cps, moved) = spacer(xu - cursor, tol);
-        cursor += moved;
-        out.extend(cps);
         // A subscript that starts where the glyph would end without its italic correction.
         let mut no_ic = false;
         if (g.size - 1.0).abs() < 1e-6
@@ -678,30 +795,91 @@ fn encode(glyphs: &[Glyph], width: f64, by_x: bool, alt: bool) -> Option<Vec<u32
             let nx = units(next.x);
             no_ic = (nx - (xu + i64::from(e.3 - e.4))).abs() < (nx - (xu + i64::from(e.3))).abs();
         }
-        let (cp, adv) = lookup(g, no_ic, alt)?;
-        out.push(cp);
-        cursor += adv;
+        first.push(cands.len());
+        advs.push(candidates(g, no_ic, alt, &mut cands)?);
+        xs.push(xu);
     }
-    let (cps, _) = spacer(units(width) - cursor, tol);
+    first.push(cands.len());
+    let end = units(width);
+    // The fewest code points: `best[c]` is the least for the glyphs up to the one that `cands[c]` is a way to write, written so
+    // (and the way of the glyph before it).
+    let mut best: Vec<(usize, usize)> = Vec::with_capacity(cands.len());
+    for i in 0..n {
+        for ci in first[i]..first[i + 1] {
+            let c = cands[ci];
+            let mut pick = (usize::MAX, 0);
+            if i == 0 {
+                pick = (1 + spacer_len(xs[0] - c.left, tol), 0);
+            } else {
+                for pi in first[i - 1]..first[i] {
+                    let cursor = xs[i - 1] + advs[i - 1] + cands[pi].right;
+                    let cost = best[pi].0 + 1 + spacer_len(xs[i] - c.left - cursor, tol);
+                    if cost < pick.0 {
+                        pick = (cost, pi);
+                    }
+                }
+            }
+            best.push(pick);
+        }
+    }
+    let mut choice = vec![0usize; n];
+    if n > 0 {
+        let mut pick = (usize::MAX, 0);
+        for ci in first[n - 1]..first[n] {
+            let cost =
+                best[ci].0 + spacer_len(end - (xs[n - 1] + advs[n - 1] + cands[ci].right), tol);
+            if cost < pick.0 {
+                pick = (cost, ci);
+            }
+        }
+        let mut ci = pick.1;
+        for i in (0..n).rev() {
+            choice[i] = ci;
+            ci = best[ci].1;
+        }
+    }
+    let mut out = Vec::with_capacity(n * 2);
+    let mut asked = Vec::new();
+    let mut cursor = 0i64;
+    for i in 0..n {
+        let c = cands[choice[i]];
+        let want = xs[i] - c.left - cursor;
+        let (cps, moved) = spacer(want, tol);
+        if want != 0 {
+            asked.push(want);
+        }
+        cursor += moved;
+        out.extend(cps);
+        out.push(c.cp);
+        cursor += advs[i] + c.left + c.right;
+    }
+    let want = end - cursor;
+    let (cps, _) = spacer(want, tol);
+    if want != 0 {
+        asked.push(want);
+    }
     out.extend(cps);
-    Some(out)
+    Some((out, asked))
 }
 
 /// The shortest writing: document order or by x, with the private-use twins of letters where a negative spacer is in it
 /// and the font has twins (a font with real letter code points).
-fn encode_best(glyphs: &[Glyph], width: f64) -> Option<Vec<u32>> {
+fn encode_best(glyphs: &[Glyph], width: f64) -> Option<(Vec<u32>, Vec<i64>)> {
     let negative = |cps: &[u32]| {
         cps.iter()
             .any(|cp| NEG.contains(cp) || NAMED.iter().any(|(n, c)| *n < 0 && c == cp))
     };
-    let mut best: Option<Vec<u32>> = None;
-    for by_x in [false, true] {
-        let mut cps = encode(glyphs, width, by_x, false)?;
-        if negative(&cps) && BASE.iter().any(|e| e.6 != 0) {
-            cps = encode(glyphs, width, by_x, true)?;
+    let doc = ordered(glyphs, false);
+    let by_x = ordered(glyphs, true);
+    let same = doc.iter().zip(&by_x).all(|(a, b)| core::ptr::eq(*a, *b));
+    let mut best: Option<(Vec<u32>, Vec<i64>)> = None;
+    for order in if same { vec![doc] } else { vec![doc, by_x] } {
+        let mut r = encode(&order, width, false)?;
+        if negative(&r.0) && BASE.iter().any(|e| e.6 != 0) {
+            r = encode(&order, width, true)?;
         }
-        if best.as_ref().is_none_or(|b| cps.len() < b.len()) {
-            best = Some(cps);
+        if best.as_ref().is_none_or(|b| r.0.len() < b.0.len()) {
+            best = Some(r);
         }
     }
     best
@@ -875,7 +1053,23 @@ fn flush(
         out.extend(nodes[start..].iter().map(|(n, _)| emit(n, ctx, depth)));
         return;
     }
-    if let Some(cps) = encode_best(&glyphs, offset) {
+    if let Some((cps, asked)) = encode_best(&glyphs, offset) {
+        SPACES.with(|m| {
+            if let Some(list) = m.borrow_mut().as_mut() {
+                list.extend(asked);
+            }
+        });
+        RUNS.with(|m| {
+            if let Some(list) = m.borrow_mut().as_mut() {
+                list.push((
+                    glyphs
+                        .iter()
+                        .map(|g| (g.font, g.ch, g.size, g.y, g.x))
+                        .collect(),
+                    offset,
+                ));
+            }
+        });
         out.push(run_node(&cps, offset));
     } else {
         out.extend(nodes[start..].iter().map(|(n, _)| emit(n, ctx, depth)));

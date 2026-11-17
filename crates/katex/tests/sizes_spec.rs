@@ -116,6 +116,21 @@ fn a_run_is_the_sum_of_its_advances() {
     assert!((z2.width.expect("width") - w).abs() < 0.002, "{z2:?}");
 }
 
+/// The glyphs that carry spacing and the zero-width spaces of a formula that wraps change what is written, not what it is: the
+/// width is that of the same formula in markup.
+#[test]
+fn baked_spacing_and_line_breaks_do_not_change_the_width() {
+    for tex in [
+        r"a+b=c+d=e+f=g",
+        r"f(x)=\alpha x^2+\beta, \quad g(y) \le h",
+        r"(g_2, k_2) \circ (g_1, k_1) = \big(g_2 \cup (g_1 \setminus k_2),\; k_1 \cup k_2\big)",
+    ] {
+        let with = sizes_of(tex, false, true).width.expect("width");
+        let without = sizes_of(tex, false, false).width.expect("width");
+        assert!((with - without).abs() < 0.01, "{tex}: {with} {without}");
+    }
+}
+
 #[test]
 fn stacks_get_their_width() {
     let out = render(r"\frac{a}{b}", false, true, true);

@@ -34,7 +34,7 @@ fn flag_is_off_by_default() {
     }
 }
 
-/// A formula of glyphs only is one element with one text node.
+/// A formula of glyphs only is one element with one text node (and the element of the strut where it wraps).
 #[test]
 fn a_formula_of_glyphs_is_one_run() {
     for tex in [
@@ -45,13 +45,29 @@ fn a_formula_of_glyphs_is_one_run() {
         r"e^{i\pi}+1=0",
     ] {
         let out = font_run(tex, false);
-        assert!(out.starts_with(r#"<span class="katex mf"#), "{tex}: {out}");
-        assert_eq!(out.matches("<span").count(), 1, "{tex}: {out}");
         assert!(
-            out.chars().filter(|c| private(*c)).count() >= tex.len() / 2,
+            out.starts_with(r#"<span class="katex m"#) && out.contains(" mf"),
             "{tex}: {out}"
         );
+        // one element, or two for a formula that wraps: the element of its strut, after its first segment
+        let spans = out.matches("<span").count();
+        assert!(
+            spans == 1 || (spans == 2 && out.contains(r#"<span class="mu"></span>"#)),
+            "{tex}: {out}"
+        );
+        assert!(out.chars().any(private), "{tex}: {out}");
     }
+}
+
+/// Spacing is in the glyphs: `a+b+c=d` is its seven glyphs and no spacer between them.
+#[test]
+fn spacing_is_baked_into_the_glyphs() {
+    let out = font_run(r"a+b+c=d", false);
+    let text: Vec<char> = out.chars().filter(|c| private(*c)).collect();
+    assert_eq!(text.len(), 7, "{out}");
+    // a script is its glyphs and the script space is one spacer at most
+    let out = font_run(r"x^2", false);
+    assert!(out.chars().filter(|c| private(*c)).count() <= 2, "{out}");
 }
 
 /// What the font cannot write stays markup, and the glyphs around it are runs.
@@ -60,7 +76,7 @@ fn mixed_formulas_have_text_and_elements() {
     let out = font_run(r"a + \frac{x^2}{y} = \mathbf{b} + c", false);
     assert!(out.contains(r#"class="mathbf""#), "{out}");
     assert!(out.contains("mfrac"), "{out}");
-    assert!(out.chars().filter(|c| private(*c)).count() > 8, "{out}");
+    assert!(out.chars().filter(|c| private(*c)).count() >= 4, "{out}");
     // bold b is the stock character, in a span of its own
     assert!(out.contains(">b</span>"), "{out}");
 }
@@ -70,7 +86,7 @@ fn mixed_formulas_have_text_and_elements() {
 fn text_mode_stays_text() {
     let out = font_run(r"a + \text{hello world} = b", false);
     assert!(out.contains("hello world"), "{out}");
-    assert!(out.chars().filter(|c| private(*c)).count() > 4, "{out}");
+    assert!(out.chars().filter(|c| private(*c)).count() >= 2, "{out}");
 }
 
 #[test]
@@ -111,20 +127,39 @@ fn label_and_strut_settings_are_those_of_the_compact_output() {
     );
 }
 
-/// Short formulas have no line break opportunities, long ones have a `<wbr>` between bases, as in the compact output.
+/// Short formulas have no line break opportunities. A long one that is text and inline spans has a zero-width space between its
+/// bases and wraps there (`white-space: normal`, the class `mw`); one with a stack, or stock text a browser may break, keeps the
+/// `<wbr>` of the compact output and `white-space: nowrap`.
 #[test]
 fn line_breaks_are_those_of_the_compact_output() {
-    assert!(!font_run(r"a+b=c", false).contains("<wbr>"));
+    let breaks = |out: &str| {
+        (
+            out.matches('\u{200b}').count(),
+            out.matches("<wbr>").count(),
+        )
+    };
+    assert_eq!(breaks(&font_run(r"a+b=c", false)), (0, 0));
     let long = font_run(r"a+b=c+d=e+f=g", false);
-    assert!(long.contains("<wbr>"), "{long}");
-    assert!(!font_run(r"a+b=c+d=e+f=g", true).contains("<wbr>"));
-    // the number of break opportunities does not depend on the glyphs having become code points
-    assert_eq!(
-        long.matches("<wbr>").count(),
-        render(r"a+b=c+d=e+f=g", false, levels::ALL)
-            .matches("<wbr>")
-            .count()
+    assert!(
+        long.contains(r#"class="katex mw mf"#) || long.contains(" mw "),
+        "{long}"
     );
+    assert!(breaks(&long).0 >= 2 && breaks(&long).1 == 0, "{long}");
+    assert_eq!(breaks(&font_run(r"a+b=c+d=e+f=g", true)), (0, 0));
+    // the same number of break opportunities as the compact output, and none on the other side of a space: no `<wbr>` is a loss
+    let flat = render(r"a+b=c+d=e+f=g", false, levels::ALL);
+    assert_eq!(breaks(&long).0, flat.matches("<wbr>").count());
+    // a stack: the inline block would allow breaks of its own, so `<wbr>` and `nowrap`
+    let stack = font_run(r"a+b=c+\frac{d}{e}+f=g", false);
+    assert_eq!(breaks(&stack).0, 0, "{stack}");
+    assert!(breaks(&stack).1 >= 2 && !stack.contains(" mw"), "{stack}");
+    // a hyphen in stock text: a browser may break after it
+    let text = font_run(r"a+b=c+\text{non-zero}+d=e+f", false);
+    assert_eq!(breaks(&text).0, 0, "{text}");
+    assert!(breaks(&text).1 >= 1, "{text}");
+    // spaces of stock text are no-break spaces in a formula that wraps at zero-width spaces
+    let words = font_run(r"a+b=c+\text{two words}+d=e+f", false);
+    assert!(words.contains("two\u{a0}words"), "{words}");
 }
 
 #[test]
