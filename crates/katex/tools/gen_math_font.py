@@ -9,10 +9,13 @@ SPEC.json (all keys optional):
   ic_fonts     fonts whose glyphs get their italic correction added to the advance (default ["Math-Italic"])
   script_sizes sizes (of the base) of script variants, with "pairs": [[size, shift_em], ...]
   script_glyphs ["Font:char", ...] glyphs that get script variants (default: letters, digits, common symbols)
-  spacers      advances in em of named spacer glyphs
+  spacers      advances in em of named spacer glyphs ({name: em})
   rules        [[thickness_em, shift_em], ...] families of rule glyphs
   ascent, descent  hhea/OS/2 vertical metrics in em
   overlays     [{"base": "Font:char", "over": "Font:char", "dx": em, "dy": em, "size": s}, ...] accent composites
+  spacing      {"bin"|"rel"|"punct": [[left_em, right_em], ...]}: for every glyph of those classes (KaTeX's symbols table) a glyph with a gap
+               before and after it
+  script_space [[size, shift, gap_em], ...]: for the glyphs of those script variants a glyph with the script space after it
   pua_only     every glyph at a private-use code point (what the Rust encoder needs; default false)
   alt_letters  private-use twins of the real letters (only without pua_only)
 
@@ -176,6 +179,43 @@ class Builder:
                 self.new_slot('script:%s:%s' % (size, shift), s)
                 self.variants[(name, ch, size, shift)] = s
 
+    def symbol_groups(self):
+        """(font name, character) -> the atom groups KaTeX's math symbols table gives it (`bin`, `rel`, `punct`, ...)."""
+        groups = {}
+        names = {'main': 'Main-Regular', 'ams': 'AMS-Regular'}
+        for e in json.load(open(os.path.join(HERE, '..', 'data', 'symbols.json'))):
+            r = e.get('replace')
+            if e['mode'] != 'math' or e['font'] not in names or not r: continue
+            if r.startswith('\\u'): r = chr(int(r[2:], 16))
+            if len(r) == 1: groups.setdefault((names[e['font']], ord(r)), set()).add(e['group'])
+        return groups
+
+    def add_baked(self):
+        """Glyphs that carry TeX's spacing: the base glyph at an x offset and with a larger advance, so that `a + b` is three
+        glyphs and not three glyphs and the spacers of both gaps. spec["spacing"] maps an atom group (bin, rel, punct) to the
+        (left, right) gaps in em that get a glyph, for every glyph of the font that the symbols table puts in the group;
+        spec["script_space"] is [[size, shift, gap], ...]: the glyphs of those script variants with a gap after them (KaTeX's
+        script space) when they end a script."""
+        sp = self.spec
+        self.baked = {}
+        groups = self.symbol_groups()
+        for (name, ch), b in self.base.items():
+            for grp in sorted(groups.get((name, ch), ())):
+                for left, right in (sp.get('spacing') or {}).get(grp, []):
+                    lu, ru = round(left * UPEM), round(right * UPEM)
+                    if (name, ch, 1.0, 0.0, lu, ru) in self.baked: continue
+                    s = Slot((name, ch, 1.0, 0.0, lu, ru), b.adv + lu + ru, comps=[(b, lu, 0, 1.0, 1.0)])
+                    self.new_slot('baked', s)
+                    self.baked[(name, ch, 1.0, 0.0, lu, ru)] = s
+        for size, shift, gap in sp.get('script_space') or []:
+            for (name, ch, sz, sh), v in list(self.variants.items()):
+                if sz != size or sh != shift: continue
+                b = self.base[(name, ch)]
+                gu = round(gap * UPEM)
+                s = Slot((name, ch, size, shift, 0, gu), v.adv + gu, comps=[(b, 0, round(shift * UPEM), round(size * 16384) / 16384, round(size * 16384) / 16384)])
+                self.new_slot('baked', s)
+                self.baked[(name, ch, size, shift, 0, gu)] = s
+
     def add_spacers(self):
         sp = self.spec
         for nm, em in (sp.get('spacers') or {}).items():
@@ -186,6 +226,14 @@ class Builder:
                 s = Slot(('space', nm), round(em * UPEM), contours=[])
                 self.new_slot('spacers', s)
             self.spacer[nm] = s
+        # U+200B: where the encoder writes a line break opportunity (`compact`, class `mw`). A font that has it keeps the browser from
+        # asking another font for it, which would put that font's ascent and descent in the line.
+        self.zwsp = self.new_slot('zwsp', Slot(('space', 'zwsp'), 0, contours=[]))
+        self.zwsp.cp = 0x200B
+        # U+202F: the content of the strut of a formula that wraps (it is a no-break character, so that the strut stays with the text
+        # that follows it, and has no advance)
+        self.wj = self.new_slot('zwsp', Slot(('space', 'nnbsp'), 0, contours=[]))
+        self.wj.cp = 0x202F
         self.pos_bin = {}; self.neg_bin = {}
         for k in range(0, 15):
             s = Slot(('space', '+%d' % (1 << k)), 1 << k, contours=[])
@@ -226,7 +274,7 @@ class Builder:
 
     # -------- code points
     def allocate(self):
-        used = set()
+        used = {0x200B, 0x202F}
         mi = self.mi
         def claim(s, cp):
             if cp in used: return False
@@ -235,7 +283,7 @@ class Builder:
             r = self.real_cp(name, ch)
             if r is not None: claim(s, r)
         order = ['spacers', 'noic', 'alt'] + [p for p in self.planes if p.startswith('base:')] + \
-                [p for p in self.planes if p.startswith('script:')] + ['rules', 'overlays', 'negspacers']
+                [p for p in self.planes if p.startswith('script:')] + ['baked', 'rules', 'overlays', 'negspacers']
         nxt = BMP_PUA[0]
         def next_cp():
             nonlocal nxt
@@ -377,6 +425,7 @@ def build(fonts_dir, spec, outdir, name):
     if spec.get('alt_letters', True): b.add_alt_letters()
     b.add_spacers()
     b.add_script_variants()
+    b.add_baked()
     b.add_rules()
     b.add_overlays()
     b.allocate()
@@ -424,6 +473,8 @@ def write_map(b, path, name):
     for (font, ch, size, shift), s in b.variants.items():
         var.setdefault('%s,%s' % (size, shift), OrderedDict())['%s:%d' % (font, ch)] = [s.cp, em(s.adv)]
     m['variants'] = [{'size': float(k.split(',')[0]), 'shift': float(k.split(',')[1]), 'glyphs': v} for k, v in var.items()]
+    m['breaks'] = {'zwsp': b.zwsp.cp, 'nnbsp': b.wj.cp}
+    m['baked'] = [[k[0], k[1], k[2], k[3], round(k[4]), round(k[5]), s.cp, em(s.adv)] for k, s in b.baked.items()]
     m['spacers'] = {'named': {k: [s.cp, em(s.adv + s.neg)] for k, s in b.spacer.items()},
                     'pos': {str(k): s.cp for k, s in b.pos_bin.items()}, 'neg': {str(k): s.cp for k, s in b.neg_bin.items()},
                     'unit': 1 / UPEM}

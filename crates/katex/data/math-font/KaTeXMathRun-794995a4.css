@@ -1,0 +1,4 @@
+@font-face { font-family: KaTeXMathRun-794995a4; src: url(KaTeXMathRun-794995a4.woff2) format('woff2'); font-display: block; }
+.mf { font: normal 1.21em/0 KaTeXMathRun-794995a4; white-space: nowrap; text-indent: 0; text-rendering: geometricPrecision; letter-spacing: normal; }
+.mf::before { content: ''; display: inline-block; height: var(--h); vertical-align: var(--v); }
+.katex-display > .mf { display: block; text-align: center; }

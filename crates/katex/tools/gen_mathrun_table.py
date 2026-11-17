@@ -47,6 +47,8 @@ def main():
             f, ch = k.rsplit(':', 1)
             var.append((FONTS.index(f), int(ch), size, shift, cp, u(adv)))
     var.sort()
+    baked = sorted((FONTS.index(f), int(ch), round(size * 1000), round(shift * 1000), left, right, cp)
+                   for f, ch, size, shift, left, right, cp, adv in m.get('baked', []))
     sp = m['spacers']
     named = sorted((u(a), cp) for cp, a in sp['named'].values())
     pos = [sp['pos'][str(1 << k)] for k in range(15)]
@@ -76,6 +78,12 @@ def main():
             '/// (font, character, size in thousandths, shift in thousandths of an em, code point, advance), sorted.',
             'pub static VARIANTS: &[(u8, u32, u16, i16, u32, i32)] = &[']
     out += ['    (%d, %d, %d, %d, %d, %d),' % v for v in var]
+    out += ['];', '',
+            '/// Glyphs that carry a gap before and after them (TeX\'s spacing, the script space): (font, character, size in thousandths, shift in thousandths of an em,',
+            '/// gap before and gap after in font units, code point), sorted. The glyph is the one at that size and shift moved right by the gap before',
+            '/// and with the advance of the glyph plus both gaps.',
+            'pub static BAKED: &[(u8, u32, u16, i16, i16, i16, u32)] = &[']
+    out += ['    (%d, %d, %d, %d, %d, %d, %d),' % b for b in baked]
     out += ['];', '', '/// Spacers with their own code point: (advance in font units, code point), sorted by advance.',
             'pub static NAMED: &[(i32, u32)] = &[']
     out += ['    (%d, %d),' % n for n in named]
