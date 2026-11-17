@@ -8,19 +8,24 @@ points, and wherever it cannot, they stay the elements the compact output writes
 `levels::FONT_RUN` step, off by default (the page must serve the font).
 
 ```html
-<!-- a + \frac{x^2}{y_i} = \mathbf{b}: text, a stack whose rows are text, text, a span in a stock KaTeX font.
-     682 bytes and 16 elements (the flat design: 745 bytes, 21); the private-use characters are written as &#x...; here -->
-<span class="katex mf f" role="math" aria-label="a + \frac{x^2}{y_i} = \mathbf{b}" style="--h:1.499em;--v:-.4811em">&#xE192;&#xE008;&#xE00E;&#xE00D;&#xE00C;&#xE05D;&#xE005;&#xE011;&#xE010;&#xE00B;<wbr><span class="nulldelimiter"></span>
-  <span class="mfrac"><span class="X" style="padding-top:1.0179em;height:.4811em;vertical-align:-.4811em"><span class="W k1" style="top:-2.655em"><span class="F63">&#xE1AA;<span class="F31 zd">&#xE19A;</span></span></span><span class="W k1 iu"><span class="frac-line x0"></span></span><span class="W k1" style="top:-3.394em"><span class="F63">&#xE1A9;<span class="F31 zk">&#xE064;</span></span></span></span></span><span class="nulldelimiter"></span>
-  &#xE013;&#xE00F;&#xE00D;&#xE00C;&#xE06F;&#xE008;&#xE011;&#xE00D;&#xE00B;<wbr><span class="mathbf">b</span></span>
+<!-- a+b+c=d: 7 characters (the spacing is in the glyphs); it was 31 -->
+<span class="katex mf f" role="math" aria-label="a+b+c=d" style="--h:.7778em;--v:-.0833em">⟨E199⟩⟨ED73⟩⟨E19A⟩⟨ED73⟩⟨E19B⟩⟨ED7F⟩⟨E19C⟩</span>
+
+<!-- f(x)=\alpha x^2+\beta: it wraps, so its line breaks are U+200B between its bases (and the element of the strut) -->
+<span class="katex mw mf t11" role="math" aria-label="f(x)=\alpha x^2+\beta">⟨E19E⟩⟨E061⟩⟨E1B0⟩⟨E062⟩⟨ED7F⟩<span class="mu"></span>⟨200B⟩⟨E1BF⟩⟨E1B0⟩⟨F0BF⟩⟨ED73⟩⟨200B⟩⟨E1C0⟩</span>
+
+<!-- a + \frac{x^2}{y_i} = \mathbf{b}: text, a stack whose rows are text, text, a span in a stock KaTeX font; a stack keeps <wbr>.
+     634 bytes and 16 elements (the flat design: 745 bytes, 21). ⟨XXXX⟩ is a private-use character (or U+200B) -->
+<span class="katex mf f" role="math" aria-label="a + \frac{x^2}{y_i} = \mathbf{b}" style="--h:1.499em;--v:-.4811em">⟨E199⟩⟨ED73⟩<wbr><span class="nulldelimiter"></span><span class="mfrac"><span class="X" style="padding-top:1.0179em;height:.4811em;vertical-align:-.4811em"><span class="W k1" style="top:-2.655em"><span class="F63">⟨E1B1⟩<span class="F31 zd">⟨E1A1⟩</span></span></span><span class="W k1 iu"><span class="frac-line x0"></span></span><span class="W k1" style="top:-3.394em"><span class="F63">⟨E1B0⟩<span class="F31 zk">⟨E06B⟩</span></span></span></span></span><span class="nulldelimiter"></span>⟨ED7F⟩<wbr><span class="mathbf">b</span></span>
 ```
 
 Every formula gets the font for the maximal parts it can express and markup for the rest. `crates/katex/src/mathrun.rs` is the encoder, `compact::levels::FONT_RUN` the switch, `docs/font-measurements/` the scripts and
 numbers. What it gives (the 1,128-formula corpus, "Results" below): **88.7% of the glyphs in text nodes (98.9% if `\text` is
-written as glyphs too), 3.2 elements a formula where the flat design has 9.3, 30% fewer bytes in the DOM, 0.6 to 0.8 of the
-flat design's browser time for the formulas that are all glyphs** (2 to 3 times the floor of the same text as plain text), and
-ideal TeX positions (glyph x within 0.25 px of KaTeX JS, the median formula within 0.02 px; KaTeX's own rounding error is the larger
-part of the difference), for a font of **72.8 KB** (WOFF 2) that has to be served.
+written as glyphs too), 11.1 characters a formula (1.05 a glyph: the spacing between the atoms is in the glyphs), 2.7 elements a formula
+where the flat design has 9.3, 15% fewer bytes in the DOM than the first version of this design and 40% fewer than the flat design, 0.45 to 0.85 of the flat design's browser time
+for the formulas that are all glyphs** (3 to 3.7 times the floor of the same text as plain text), no `<wbr>` element in a formula that is text
+and inline spans, and ideal TeX positions (glyph x within 0.28 px of KaTeX JS, the median formula within 0.02 px; KaTeX's own rounding
+error is the larger part of the difference), for a font of **75 KB** (WOFF 2) that has to be served.
 
 ## Files
 
@@ -59,11 +64,18 @@ in UTF-8; about 3,900 of the 6,400), so a run of text in it is one script run (s
    font units; the advance in `hmtx` is the scaled advance. One per (size, vertical shift, glyph), with the size and shift
    **relative to the element that holds the run**: 0.7 and 0.5 of a formula's font, 0.714 (a script inside a script-size span of a
    stack), shifts from -1.3 to +1 em. The set of pairs is derived from the corpus (below).
-4. **Spacers**: empty glyphs with exact advances: 16 named ones (the commonest gaps: 5mu, 4mu, 0.05 em script space, 3mu, ...) and a
-   binary set of +-2^k units (k = 0..14), so any kern is a few characters. A negative spacer has advance 0 in `hmtx` and a
-   negative `XAdvance` from one GPOS single-adjustment lookup (the only lookup of the font, registered under `dist`, `kern`,
-   `locl`, `mark` and `rlig`, so that a page that switches kerning off does not lose it).
-5. Accent overlays (two-component composites) and rule glyphs (a unit rectangle scaled in x and y) are in the font and are not used by
+4. **Spacing in the glyphs** (`BAKED`): a composite of the base glyph at an x offset, with the advance of the glyph plus a gap before it and
+   a gap after it. For every glyph of Main-Regular and AMS that KaTeX's symbol table puts in a class that TeX spaces: binary operators
+   (medium space before and after: `(0.2222, 0.2222)`, `(0.2222, 0)` and `(0, 0.2222)` em), relations (thick space: 0.2778 em the same
+   three ways), punctuation (thin space after: `(0, 0.1667)`); and for the glyphs of the three commonest script variants (0.7 at -0.15, 0.363
+   and 0.413 em) one with KaTeX's script space (0.05 em) after it. 1,071 glyphs, 352 of them for spacing.
+5. **Spacers**: empty glyphs with exact advances: 23 named ones, the distances that the encoder still writes after the glyphs carry the spacing
+   (chosen from the corpus, see "Spacing"), and a binary set of +-2^k units (k = 0..14), so any kern is a few characters. A negative
+   spacer has advance 0 in `hmtx` and a negative `XAdvance` from one GPOS single-adjustment lookup (the only lookup of the font, registered
+   under `dist`, `kern`, `locl`, `mark` and `rlig`, so that a page that switches kerning off does not lose it).
+6. **Two real code points**: U+200B (a line break opportunity that `compact` writes) and U+202F (the content of the strut of a formula that wraps), both
+   empty and without an advance, so that the browser does not ask another font for them (another font's ascent and descent would be in the line).
+7. Accent overlays (two-component composites) and rule glyphs (a unit rectangle scaled in x and y) are in the font and are not used by
    the encoder yet (accents are stacks in KaTeX's tree; a fraction's bar is a border).
 
 Vertical metrics: `hhea` and `OS/2` ascent and descent are those of KaTeX_Main (0.903 and 0.272 em), so a line that holds a formula
@@ -76,9 +88,12 @@ that holds the text: inline flow, `em` margins and `top` offsets, `vlist` tables
 baseline by the height of its `pstrut`), `rlap`/`llap` (zero width), centred limits. In every list of sibling nodes:
 
 * consecutive nodes the font can express become one text node: each glyph is its code point, and where it is not where the
-  previous glyph ends, spacers close the gap (named first, then binary ones; a negative one moves the cursor back, which is how
-  stacked scripts are one run: the superscript, a spacer back, the subscript, a pad). Glue at the ends of such a group is
-  absorbed (it ends the line before a `<wbr>` as before);
+  previous glyph ends, a glyph that carries the gap or spacers close it (a negative spacer moves the cursor back, which is how
+  stacked scripts are one run: the superscript, a spacer back, the subscript, a pad). Which, is decided for the whole run, by the fewest
+  code points: for each glyph its plain code point or one of the glyphs of `BAKED` for it, and for what is left of a gap a named
+  spacer and binary ones (a dynamic programme over the glyphs, `mathrun::encode`: a gap is written once, the glyph on its left that can carry it
+  does, and the one on its right uses its plain glyph or the one with no gap before it). Glue at the ends of such a group is
+  absorbed (it ends the line before a break as before);
 * a node it cannot express stays an element, and its children are treated by the same rule;
 * what is expressible: symbols in the font's source fonts (Main-Regular, Math-Italic, AMS, Size1-4) with their italic corrections
   and margins, `mspace` glue, nodes with `margin-left`/`margin-right`/`top`, lone and stacked scripts and limits whose content is
@@ -91,8 +106,35 @@ baseline by the height of its `pstrut`), `rlap`/`llap` (zero width), centred lim
   be selected and read; `TEXT_AS_GLYPHS` makes it glyphs too, bit-for-bit the same layout, at 3 bytes a character);
 * the root (`.katex`) keeps the strut and `compact_line` handling of the flat design and gets the class `mf`.
 
-`<wbr>` between bases and `compact_wrap_min` are the flat design's (the count is of the characters KaTeX has, not of code points).
+The break opportunities between bases and `compact_wrap_min` are the flat design's (the count is of the characters KaTeX has, not of code points).
 A text node's total advance is never negative (Chrome clamps it, below): a group whose width is negative stays elements.
+
+#### Line breaks
+
+KaTeX allows a break between its `base` blocks, and the flat design writes a `<wbr>` there (in an element with `white-space: nowrap`, which does not
+stop it). A `<wbr>` costs about as much as a span. When a formula that is wide enough to wrap (`compact_wrap_min`, inline) is **text and inline
+spans only**, its breaks are **U+200B between its bases**, and the formula is `white-space: normal` (the class `mw`):
+
+* nothing else can break in it. In a run of private-use code points a browser has no break opportunity (they are all letters for it, tried for
+  all 6,400, next to each other and to Latin letters); the spaces of stock text (`\text`) are no-break spaces, which look the same; the spans
+  are `white-space: nowrap` (`.katex.mf.mw span`) and the formula is `overflow-wrap: normal; word-break: normal; line-break: auto` (a page that
+  has `overflow-wrap: anywhere` on its messages would break a long segment otherwise: 6 of the 33 targeted formulas and 2 of the 322 that wrap
+  at 300 px did);
+* **what keeps `<wbr>`** (and `white-space: nowrap`), because a browser does allow a break there and nothing stops it: a formula that has an
+  inline block (a stack, an SVG, a table: Chrome 156 allows a break before and after one whatever the parent's `white-space` is, and a word joiner
+  next to it does not stop the break before it), and one that has stock text with an opening bracket, a hyphen, a question mark, another
+  non-ASCII character (a break after a hyphen, a question mark, the dashes and the ellipsis and before a bracket that follows
+  punctuation: tried for every pair of ASCII punctuation marks). In the corpus 416 of the 470 formulas that wrap are written with U+200B
+  (986 of them, instead of 1,105 `<wbr>`), 54 keep 119 `<wbr>`; 52 of those have a stack or an SVG, 2 only stock text with `(`, `-` or `?`;
+* the formula's **strut** is an element after its first segment, `<span class="mu"></span>` (an empty inline block with the height and
+  vertical alignment of the root's `::before` in the other formulas, from the same rules): the root's `::before` is an inline block, a browser may break
+  after one, and the formula's first segment would go to the next line and leave the strut at the end of the previous (a first line 5 px
+  taller than KaTeX's; a strut that is the first thing of an element wrapped round the first segment was no better: the wrapper is one more
+  inline block per formula, 15 microseconds on a page of 3,000 of them). With the strut after the first segment, the heights and baselines of the
+  paragraphs of all 1,128 corpus formulas at 300 and 760 px are those of the `<wbr>` output;
+* in the font U+200B has a glyph (no advance), so it is not drawn by another font; in a shaping run it is a character like the others and splits
+  nothing. A browser reports the rect of a character next to a zero-width space as a half of the pair (a cluster), which matters
+  to whoever measures glyph rects (`mfpos.py`), not to what is drawn.
 
 ### The stylesheet
 
@@ -102,7 +144,9 @@ generated font first in `font-family` (the stock KaTeX_Main after it) with `text
 `.amsrm`, `.delimsizing.size1`, `.op-symbol.small-op`, ...) with the generated font first. So a character that is not in the
 generated font (every real character: stock text, bold letters) is drawn by the stock font of its element as before, and a glyph
 run inside a stock-font span is drawn by the generated font. The stock `@font-face` rules are those of the compact stylesheet:
-a browser fetches only the faces a page uses.
+a browser fetches only the faces a page uses. For `.katex.mf.mw` (a formula that wraps at U+200B) it has `white-space: normal` and the
+`overflow-wrap`, `word-break` and `line-break` that a page's rules cannot change, `white-space: nowrap` for its spans, no `::before` and the
+strut rules for `.mu` (a copy of those for `::before`, per strut class).
 
 ### What the consumer must do
 
@@ -114,8 +158,8 @@ a browser fetches only the faces a page uses.
    (`mathrun::BLANK_FONT_WOFF2`, second argument), which makes the spacers draw nothing while the font loads or if it fails.
 3. Keep `text-rendering: geometricPrecision` on formulas (the stylesheet does it); a page rule that sets `text-rendering`,
    `letter-spacing`, `font-family` or `font` on `.katex` would change the output.
-4. The text of a formula that is in the font is private-use characters when selected or copied; the TeX is in the `aria-label`
-   (`compact_label`). A page that wants the TeX on the clipboard needs a `copy` handler.
+4. The text of a formula that is in the font is private-use characters when selected or copied (and U+200B where it can wrap); the TeX is in
+   the `aria-label` (`compact_label`). A page that wants the TeX on the clipboard needs a `copy` handler.
 
 ### Precision
 
@@ -159,10 +203,9 @@ them both raised and lowered ones. The two shifts of a lone subscript (0.7, -0.1
 | 109 (all) | 100% | 100% |
 
 The tail does not shrink by rounding the shifts (to 0.005 em: 133 pairs, to 0.02 em: 113): the large shifts are stacked-script and
-big-operator positions, one per kind of base. Named spacers: the 16 commonest gaps are 5mu (1,167 occurrences), 4mu (847), the
-0.05 em script space (680), 3mu (525), then 0.327, 0.2715 em, 0.25 em, 2.17 em, ... (`results/gap_clusters.json`); the top 8 are 78%
-of the gaps of 100 units or more, the top 16 83%, the rest are written with the binary spacers. Accents are rare in this corpus
-(3 occurrences, `\hat` and similar in none with a single-glyph base), so the 468 accent composites are for completeness.
+big-operator positions, one per kind of base. Accents are rare in this corpus (3 occurrences, `\hat` and similar in none with a single-glyph
+base), so the 468 accent composites are for completeness. (Spacers are "Spacing in the glyphs and the named spacers", below; the first version
+of the table of named spacers had every advance at half its value, so it was hardly used: that is how `a+b+c=d` came to be 31 characters.)
 
 ### Which pairs the font has
 
@@ -176,6 +219,44 @@ the same share of glyphs in text nodes (88.7% and 83.5%) and 2.96 elements a for
 font for 6% fewer elements: not taken. A formula the corpus did not have is covered by these as far as its scripts sit at the same
 shifts: see the held-out check below.
 
+### Spacing in the glyphs and the named spacers
+
+`tools/mkfont.sh` (step 2 and 3), `mfgaps.py`, `mfscriptspace.py`, `mfnamed.py`. The encoder wrote every gap between atoms as spacers: `a+b+c=d` is
+seven glyphs and 24 spacers (four binary ones around each `+`: 31 characters in all). What the corpus has (the glyph runs the encoder wrote for the 2,256
+renderings, gaps in font units, 4,000 to the em; TeX's thin, medium and thick space are 667, 889 and 1,111, the script space after a script 200):
+
+| class (KaTeX's symbol table) | occurrences | gaps before and after (the glyph's own, in the run) |
+| --- | --- | --- |
+| relation | 3,360 | thick/thick 1,928; script space + thick/thick 840; thick (a gap at the start of the run) /thick 336; 0/thick 104; none 68 |
+| binary operator | 3,076 | medium/medium 1,476; script space + medium/medium 1,120; 0/0 204 (an operator at the start of a formula is an ordinary atom); medium (start)/medium 120 |
+| punctuation | 3,648 | 0/thin 1,556; 0/0 984 (the comma in `1,000`); script space/0 388; script space/thin 316; 0/quad+thin 172 |
+
+So a relation or a binary operator is one glyph with its space on both sides, and the script space is a gap of its own that follows a script glyph
+(5,644 of them follow a script glyph: 4,348 the subscript at -0.15 em, 540 the superscript at 0.413, 496 at 0.363, 3 other pairs the rest; the
+three pairs are 95% of them). A gap belongs to **one** glyph:
+
+* the encoder decides for the whole run, by the fewest code points, a dynamic programme over the glyphs (`mathrun::encode`): each glyph is its plain code
+  point or one of the glyphs of `BAKED` for it (left gap, right gap), what is left of a gap is a named spacer and binary ones (`spacer`). So where two
+  glyphs that carry a gap meet, the one on the left carries it (its right gap) and the one on the right uses the glyph without a left gap, as it
+  does after a letter; a relation after a script is the script's glyph with the script space, the relation with its thick space on both sides: no spacer;
+* the glyph set is every glyph that the symbol table puts in a class, not those of the corpus: 69 relations and 35 binary operators of Main-Regular,
+  11 and 1 of AMS, 4 punctuation marks: 3 glyphs each for the classes with two gaps (352 in all), and the script glyphs of the three pairs (719: all that the font has at those pairs). A glyph costs a few
+  compressed bytes (the font is 2,232 bytes larger, 3.1%, with 1,080 more glyphs);
+* positions are those of spacers: a baked glyph is the base glyph at x = the left gap and has the advance of both gaps, so the cursor is where it
+  would be. The encoder writes a gap to within one font unit (a remainder of one unit is not written, an odd one is made even), so a glyph is within a
+  unit or two of the position the layout gave it, as before: of the 3,365 glyphs of the display runs that could be matched with the positions the encoder was given, the old
+  output has 2,396 exact, 832 one unit too far right and 137 one too far left, the new 2,814, 457 and 94. The positions of old and new differ by
+  at most 3 units for every glyph of the inline formulas and for 99.3% of those of the display ones (up to 8 in the longest runs, where the rounding of
+the trailing gap of each of the runs that are one text node adds up; see "h").
+
+What is left after that are 0.56 spacers a formula, 0.45 of them named: the 23 named spacers are chosen greedily from the distances the encoder
+wrote spacers for (115 different ones in the corpus), the one that saves most code points first, as long as it saves 30 on the corpus (200 and the thin
+and medium space after a script when a glyph has no variant, 1,089 and 1,311 (script space and medium or thick), the quad and the `\qquad` with the
+thin space, the negative ones of stacked scripts, ...). The binary spacers write the long tail: 0.11 a formula.
+
+(The 16 named spacers of the first version of this design had every advance at half the value they were chosen for, so they matched
+nothing: that is a part of why `a+b+c=d` was 31 characters.)
+
 ## Results
 
 Measured on the shared machine, headless Chrome 156 on Linux over CDP, KaTeX JS 0.18.5, the 1,128-formula corpus of the
@@ -187,11 +268,12 @@ minimum is next to the median; a difference under 15% is noise. The raw files ar
 
 ### a. The font file
 
-The committed font (`KaTeXMathRun-e9c82a06`): 3,936 glyphs (3,935 code points and `.notdef`), **WOFF 2 72,784 bytes** (the same file zstd -19: 71,821; the
-untransformed WOFF 2 84,012, WOFF 1 103,180, TTF 205,100), all at U+E000..U+F8FF (3,935 of the 6,400 code points). 588 base glyphs
-(Main-Regular, Math-Italic, a 70-glyph subset of AMS, Size1-4), 2,763 script variants of 74 (size, shift) pairs, 46 spacers (16
-named, 2 x 15 binary), 468 accent overlays and 11 rule glyphs that the encoder does not use (they are 2,372 bytes of the WOFF
-2: 70,412 without them). For scale: KaTeX's own WOFF 2 of the same repertoire are 90 KB.
+The committed font (`KaTeXMathRun-794995a4`): 5,016 glyphs, **WOFF 2 75,016 bytes** (the same file zstd -19: 73,904; the
+untransformed WOFF 2 87,748, WOFF 1 114,572, TTF 234,720), 5,012 private-use code points (of the 6,400 of U+E000..U+F8FF) and U+200B and U+202F. 588 base
+glyphs (Main-Regular, Math-Italic, a 70-glyph subset of AMS, Size1-4), 59 without the italic correction, 2,763 script variants of 74 (size, shift) pairs,
+1,071 glyphs that carry spacing, 53 spacers (23 named, 2 x 15 binary), 468 accent overlays and 11 rule glyphs that the encoder does not use (2,372
+bytes of the WOFF 2: 72,648 without them). Before the spacing glyphs, the named spacers and the two break characters (`e9c82a06`): 3,936 glyphs, WOFF 2
+72,784 bytes. For scale: KaTeX's own WOFF 2 of the same repertoire are 90 KB.
 
 TTF, WOFF 1, WOFF 2 with untransformed glyf/loca and WOFF 2 with transformed glyf/loca/hmtx all load in Chrome (no OTS error,
 `document.fonts` status `loaded`) and render every glyph (3,888 of them) with 0 differing pixels across the four (`tools/fmtcheck.py`,
@@ -223,7 +305,7 @@ hybrid below, the share of glyphs that are in text nodes is what counts.)
 
 ### b. What is in text nodes
 
-`tools/mfshare.py`, `mfstock.py`. Of the 13,411 glyphs of the 1,127 inline formulas, **11,896 (88.7%) are in text nodes**; of
+`tools/mfshare.py`, `mfstock.py`. Of the 13,411 glyphs of the 1,127 inline formulas, **11,896 (88.7%) are in text nodes** (unchanged by the spacing: the glyphs are the same); of
 the 8,878 glyphs of the 365 corpus formulas that are display style, 7,415 (83.5%). 1,035 of the 1,127 inline formulas have no
 glyph outside a text node (284 of 365 display). What remains in stock spans:
 
@@ -237,15 +319,15 @@ glyph outside a text node (284 of 365 display). What remains in stock spans:
   of the formulas;
 * glyphs at a (size, shift) the font does not have: none in this corpus, which the font was derived from (see the held-out check).
 
-Elements per formula (spans, svg elements and `<wbr>`): flat 9.33 on average, median 5; **hybrid 3.16, median 1**, p95 10,
-max 46 (display style, all 1,128 formulas: 9.54 to 3.21, median 6 to 2; the 365 display formulas of the corpus: 5.57). An
-element of the flat design that is in the way of nothing (a base, a sizing span, a margin span) is a code point or a spacer now:
-the stacks (fractions, matrices, accents) are what is left, with text in their rows.
+Elements per formula (spans, svg elements and `<wbr>`): flat 9.33 on average, median 5; hybrid before the line breaks as characters 3.16; **now 2.66,
+median 1**, p95 9 (display style, all 1,128 formulas: 9.54 to 3.21, median 6 to 2: no line breaks there; the 365 display formulas of the corpus: 5.57).
+An element of the flat design that is in the way of nothing (a base, a sizing span, a margin span) is a code point or a spacer now: the
+stacks (fractions, matrices, accents) are what is left, with text in their rows.
 
-Bytes per formula, raw: **flat 339 (median 178), hybrid 239 (median 134)**, 30% fewer; display style 369 to 270. zstd -19 of all the
+Bytes per formula, raw: flat 339 (median 178); hybrid before the spacing in the glyphs 239 (134); **now 203 (111)**; display style 369, 270, **226**. zstd -19 of all the
 formulas as one stream (what a connection that compresses the whole stream gets; the markup of the flat design is mostly
-boilerplate that repeats from formula to formula, so it compresses to almost nothing): 28.6 bytes a formula flat, 29.1 hybrid
-(display 28.7 and 29.3). The private-use characters compress worse than the markup does, so on the wire the two are the
+boilerplate that repeats from formula to formula, so it compresses to almost nothing): 28.65 bytes a formula flat, 29.07 hybrid before, **28.13
+now** (display 28.66, 29.30, **27.68**). The private-use characters compress worse than the markup does, so on the wire the three are the
 same and what the hybrid saves is bytes in the DOM, memory, parse and layout.
 
 Held-out check of the (size, shift) table: the font and its pairs derived from the even-numbered formulas only and evaluated on the
@@ -438,15 +520,118 @@ formulas (measured at load 15 to 20: rough), which is why `emit_span` copies a s
   and the KaTeX fonts still ship; the font has the 74 pairs of the corpus, and a formula the corpus did not have is covered
   by the pairs it did, 3 to 4 points of the glyphs less (b above). A stacked sub and superscript are the common
   case that varies: the shift of the sub depends on the height of its glyphs, `x_i^2` has -0.259 for an `i`.
+* **What a formula that wraps at U+200B asks of the page**: nothing, the stylesheet sets `white-space`, `overflow-wrap`, `word-break` and `line-break` on it and
+  `white-space: nowrap` on its spans (a page rule that sets them on `.katex` or on a span of it at a higher specificity would change where it wraps). A host that reads the
+  formula's text gets U+200B in it, and the rects of a character next to one are half of a pair (measure the glyphs of such a formula without them: `mfpos.py` does).
+  The break opportunities are the ones KaTeX has between its bases; no other is possible in what is written as text (checked on the corpus and on 34 formulas with
+  the constructs that have one: `\text` with spaces and hyphens, brackets next to each other, slashes, bars, commas, stacks).
 * **The font version is part of every stored formula**: a change to the glyph order changes the code points, so a stored formula is
   only valid with the font it was written for (`FONT_VERSION` is in the file and family name; the version is a hash of the map). A
   consumer that stores formulas must store the version, or regenerate them when it changes.
 * **The font is derived from one corpus**: the pairs and spacers come from this corpus (the formulas of the compact work's
   corpus), see the held-out numbers; another domain wants `tools/mkfont.sh` run on its own formulas.
 
+### h. Spacing in the glyphs, named spacers, line breaks as characters
+
+The second hybrid stage (this commit range). "Old" is the output of the commit before it (`583ecb09`, the font `e9c82a06`), "new" the output now
+(font `794995a4`); both are `FONT_RUN` output, the same formulas, the same tree. Raw files in `results/hybrid/` (`h_*`).
+
+**Characters, bytes, font.** The 1,128 corpus formulas, inline and in display style (private-use characters in the text; "glyphs" are the characters that are
+not spacers: the same number in both):
+
+| | old | new |
+| --- | --- | --- |
+| characters a formula, inline: mean (median) | 25.80 (17) | **11.13 (8)** |
+| characters a visible glyph, inline | 2.441 | **1.053** |
+| spacers a formula, inline (named ones) | 15.23 (2.49) | 0.56 (0.45) |
+| characters a formula, display: mean (median); per glyph | 26.01 (17); 2.460 | **11.20 (8); 1.059** |
+| bytes a formula, raw, inline: mean (median) | 239.2 (134) | **203.4 (111)** |
+| bytes a formula, raw, display: mean (median) | 270.2 (172) | **225.8 (138)** |
+| bytes a formula, zstd -19 of the corpus as one stream, inline / display | 29.07 / 29.30 | **28.13 / 27.68** |
+| elements a formula (span, svg, `<wbr>`), inline: mean (median) | 3.16 (1) | **2.66 (1)** |
+| `<wbr>` elements, inline (formulas that have one) | 1,105 (470) | 119 (54) |
+| U+200B characters, inline (formulas) / `mu` elements | 0 | 986 (416) / 416 |
+| the font: WOFF 2 / zstd of it / glyphs | 72,784 / 71,821 / 3,936 | 75,016 / 73,904 / 5,016 |
+
+**Positions** (`mfpos.py`, `mfunits.py`; headless Chrome 156, Range rects of every glyph, 19.36 px font): the glyphs of the old and the new output are the same in all 1,128
+inline and all 1,128 display formulas (the same source character, size and shift in the same number, in the same order), and the stock text is the same characters.
+In font units (4,000 to the em), computed from the code points, the glyph positions differ by -3 to +2 (inline: 5,039 equal, 1,321 one unit less, 487 one more; none more than 3) and
+by -8 to +6 (display, where the runs of all the bases of a formula are one text node and the trailing gaps add up: 99.3% within 3). Both are within a unit or two of
+the positions the encoder was given (above), the new ones nearer. In Chrome, whose rects are in 1/64 px (0.0156): median 0.013 px, p99 0.047, **max 0.078 px**
+(inline; display 0.010, 0.031, 0.047); 427 of the 1,128 inline formulas (315 display) have a glyph 2/64 px or more from where it was. Formula width: max 0.078 px inline
+(95 above 1/64 px), 0.031 px display (6). Not zero, and not the encoder: the zero-width spaces make a text one text node where `<wbr>` made N, and (probably) the
+width of every text fragment is rounded up to 1/64 px, so the new output is up to 4/64 px narrower than the old one (with the same encoder and `<wbr>` instead of U+200B it
+is within 1/64 px of the old: `tools/exp_w.py`, 0.0156 px at most, 0.003 px on average); against KaTeX JS the new glyph x is closer (below). Paragraph height, baseline, element
+heights: no formula differs by more than 0.02 px. Against KaTeX JS 0.18.5 in `geometricPrecision` (`mfhyb.py`, as in "c"): glyph x median 0.016, p95 0.062, p99 0.109, max 0.281 px
+inline (old: 0.016, 0.078, 0.125, 0.250); display 0.031, 0.062, 0.094, 0.156; widths max 0.27 px inline, 0 display.
+
+**Pixels** (`mfold.py`: old and new rendered side by side, rows of 80 px, device scale 1 and 2): inline: identical in 42.0% / 63.9% of the 1,128 formulas (scale
+1 / 2), no pixel more than 64/255 different in 93.5% / 82.8%, median 8 / 0 differing pixels; display: 41.9% / 62.6%, 97.8% / 89.5%. Where they differ a glyph is one
+quarter-pixel step to the left or right (a unit or two in the position can cross the step Skia draws glyphs on), the shapes are the same: the worst formulas have 723 differing
+pixels with at most 71/255 (`T_\downarrow(x)=x\oplus(x\gg1)\oplus...`: a row of `\oplus`). 45 formulas (every 28th of the corpus and the five with the most differing pixels)
+side by side with the difference in red, scale 1 and 2: `results/crops/old_new_p*_dpr*.png`; nothing in them is different but those steps.
+
+**Line breaks** (`mfwrap.py`, a 16 px paragraph "Some words before, FORMULA and some words after, ..." of the given width, the source glyph that starts every line of the formula,
+against KaTeX JS in `geometricPrecision`, as before; `results/hybrid/h_wrap.txt`):
+
+| | formulas that wrap in KaTeX | same line starts | wrap only here | other line count |
+| --- | --- | --- | --- | --- |
+| corpus, 300 px | 322 | **322** | 0 | 1 (as before) |
+| corpus, 760 px | 19 | **19** | 0 | 0 |
+| corpus, 300 px, the host has `overflow-wrap: anywhere; word-break: break-word` | 322 | 322 | 0 | |
+| 34 targeted formulas, 60 / 90 / 120 / 150 / 200 / 250 px | 33 / 33 / 33 / 33 / 31 / 33 | all | 0 | 5 / 1 / 0 / 1 / 0 / 0 |
+
+The targeted formulas (`tools/targeted.tex`) have a stack, `\sqrt`, an arrow, a matrix, `\text` with spaces, hyphens, a question mark and brackets, `)(`, `/`, `|`, commas,
+`\mathbf`/`\mathcal`/`\mathtt`, colour, sizes, an accent, `\boxed`, spaces and `\quad`s, scripts: 22 of them are written with U+200B, 11 with `<wbr>`, one is too short to wrap (`x_1, x_2, ...`). The
+flat design (`<wbr>`, nowrap) has the same line starts at every width. The paragraph heights and baselines of the 1,128 corpus formulas at 300 and 760 px are those of the old output (15 and 0
+baselines off against KaTeX, as before). What is not the same as the old output: in a column narrower than a formula's **first segment** (60 px: 5 of the 34 targeted
+formulas, 90 px: 1, 150 px: 1, and 3 more formulas of the 1,128 at 150 px, 1 more at 200) the zero-width strut after that segment does not fit on its line and is alone on the next one
+(then the next segment): a blank line more than KaTeX and than the old output. At 300 px and above it does not occur in the corpus.
+
+**Speed**, interleaved (`measure3.py`: 9 runs of each page in turn; settle median / minimum in ms and the minimum of the main thread's CPU time for parse, style, layout, pre-paint and paint;
+3,000 paragraphs "Step i: we have FORMULA here." in 760 px; load average 2.7 to 4.1: a quiet machine this time). Floor is the formula's characters as text, flat the compact output without the step, old and
+new the hybrid before and after:
+
+| formula | floor | flat | old hybrid | **new hybrid** | new / old (cpu) | code points old -> new | elements old -> new |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `a+b+c=d` | 97 / 89, cpu 57 | 456 / 444, cpu 360 | 307 / 296, cpu 228 | **282 / 278, cpu 210** | 0.92 | 31 -> 7 | 1 -> 1 |
+| `x^2` | 96 / 86, cpu 58 | 330 / 323, cpu 248 | 287 / 277, cpu 209 | **279 / 275, cpu 208** | 1.00 | 5 -> 2 | 1 -> 1 |
+| `x_i` | 112 / 90, cpu 59 | 341 / 324, cpu 251 | 301 / 271, cpu 214 | **282 / 268, cpu 207** | 0.97 | 5 -> 2 | 1 -> 1 |
+| `f(x)=\alpha x^2+\beta` | 140 / 118, cpu 80 | 659 / 641, cpu 543 | 366 / 357, cpu 276 | **329 / 318, cpu 247** | 0.89 | 24 -> 10 | 3 -> 2 |
+| `a\,b\;c\quad d` | 118 / 98, cpu 64 | 438 / 411, cpu 333 | 303 / 272, cpu 214 | **285 / 276, cpu 213** | 1.00 | 18 -> 7 | 1 -> 1 |
+| `(g_2, k_2) \circ (g_1, k_1) = \big(g_2 \cup ...` (83 characters, 5 breaks) | 160 / 120, cpu 72 | 1986 / 1745, cpu 1457 | 590 / 497, cpu 401 | **411 / 354, cpu 279** | 0.70 | 99 -> 35 | 6 -> 2 |
+| `x_i^2` (not in the font) | 107 / 91, cpu 61 | 683 / 655, cpu 554 | 690 / 642, cpu 547 | **677 / 650, cpu 553** | 1.01 | 3 -> 3 | 6 -> 6 |
+| `\frac{a}{b}` | 105 / 89, cpu 60 | 856 / 811, cpu 695 | 882 / 812, cpu 692 | **861 / 814, cpu 691** | 1.00 | 2 -> 2 | 11 -> 11 |
+
+(Settle: median / minimum ms; cpu: minimum of the main thread's parse + style + layout + pre-paint + paint, ms. `bench4/`, `results/hybrid/bench4_micro.jsonl`.) The glyph-only formulas
+are 3.1 to 3.7 times the floor's CPU time (flat: 4.3 to 6.3), `\sqrt` and the stacks are what they were. What the characters cost is little (24 of 31 characters fewer is 8% of
+the time of such a page); what a line break costs is not: a `<wbr>` is an element, the zero-width space is a character. Formulas with 1 to 4 breaks (`abcde=fgh`, `abcde=fgh+i`, `abcde=fg+h+i`, `abcde=fg+h+i+j`, and two with 2), the same text in three
+writings (`results/hybrid/h_bench_breaks.jsonl`): old / the new encoder with `<wbr>` / the new one with U+200B, the CPU minimum in ms: 1 break 246 / 253 / 250, 2 breaks 285 / 275 / 248, 3 breaks
+317 / 290 / 252, 4 breaks 345 / 323 / 260 (the two others with 2 breaks: 286 / 269 / 254 and 273 / 263 / 250), so the zero-width space costs what a character costs and a `<wbr>` about 5 microseconds
+(a formula with one break is the same in all three). A first version that wrapped the first segment in an inline block to keep the strut with it cost about 15 microseconds a formula and
+was slower than `<wbr>` below 3 breaks; the strut as an element after the first segment is an empty inline block, as the root's `::before` was.
+
+The fixture (400 messages of 12 corpus formulas, 4,800 occurrences, `content-visibility` off, the messages `overflow-wrap: anywhere`, 9 interleaved runs, load 3.6; settle median / min,
+main-thread CPU median / min, ms): floor 217 / 201, cpu 155 / 140; flat 1,210 / 1,142, cpu 1,025 / 986; old 736 / 687, cpu 633 / 572; **new 748 / 684, cpu 633 / 572**. Parse 141 against 140, style 82
+against 80, layout 248 against 253, pre-paint 83 against 80, paint 18 against 19 (minimum): **no difference on this page**. The page has 12,480 elements in the old page and 13,171 in the new one, 1,177
+`<wbr>` against 34 and 1,143 U+200B, 691 `mu`: what the page spends its time on is the stacks, the SVG and the stock text, which are what they were, and the text of the formulas, 57% smaller in
+characters, is a part of it that was small.
+
+**Server** (`tools/mfsrv2.sh`; the corpus, 1,128 formulas, each rendered 25 times, the median per formula, the minimum over 5 interleaved rounds, load 2.8): flat 94.3 us a formula inline, old hybrid 74.7, **new
+76.2** (1.02 of the old, 0.81 of the flat; display 97.0, 75.4, 75.7). The dynamic programme and the lookup of the glyphs that carry a gap cost 11% at first; not writing everything twice
+(the order of the document and the order by x are written only if they differ) and not building a vector to count a spacer's characters brought it to 2%.
+
+**What did not work.** (1) A word joiner (U+2060), a no-break space or any of seven other characters in front of a strut or an inline block does not stop a break before it in Chrome 156, and
+`white-space: nowrap` on the element, the parent or a wrapper does not stop one either (an inline block inside a `nowrap` span, in a `normal` block, still has a break opportunity before it):
+a formula with a stack keeps `<wbr>` and `nowrap`. (2) The strut of a formula that wraps as an inline box with the line height and a vertical alignment worked out from the font's ascent and descent: a browser rounds
+the half-leading to whole pixels, so the paragraphs are 1 to 2 px off. (3) The strut at the end of the formula (an `::after`): no blank line, but the first line has none of its extents: one corpus formula's
+baseline 5 px off at 760 px. (4) A `U+2060` as the first character of the text with the strut as the root's `::before`: the text goes to the next line and the strut stays on the last.
+
+
 ## Regenerating
 
-`BROTLI=/usr/bin/brotli docs/font-measurements/regen.sh` is the whole sequence (it needs the scratch directory layout described in it,
+`BROTLI=/usr/bin/brotli docs/font-measurements/regen.sh` is the whole sequence (`tools/mkfont.sh all 2` is the font: the pairs of the script glyphs, then the glyphs that carry spacing
+and the script space (`mfscriptspace.py`), then the named spacers (`mfnamed.py`), the encoder in the loop (`MATHRUN_RUNS`, `MATHRUN_SPACES` of the harness)) (it needs the scratch directory layout described in it,
 KaTeX 0.18.5's TTFs, the corpus and Chrome; about an hour). To build only the font and the table from the committed spec
 (`data/math-font/spec.json`; `-I` because the tools are not to import from the current directory):
 
@@ -471,5 +656,12 @@ corpus: `tools/mkfont.sh all 2` with its own `data/` (`mfextract.py` of its form
   vertically, so what is left of a formula after this step is the skeleton of its stacks.
 * The shifts of stacked scripts that the corpus did not have (see Risks); a table by (base height, script height) would cover them at a
   few hundred more variants.
+* Formulas with an inline block in them (a stack, an SVG: 52 of the 470 that wrap in the corpus) keep `<wbr>` and `white-space: nowrap`: Chrome allows a break before and after an
+  inline block whatever is done, so the only ways to have no `<wbr>` there would be KaTeX's own wrapper of every base (an element a base). Stock text with a bracket, a hyphen or a
+  question mark does the same (2 formulas): `\text` could be written so that no break is possible, with a word joiner after each such character, which needs a table of Unicode's line breaking
+  classes in the encoder.
+* The spacing is in the glyphs of the classes TeX spaces on both sides (binary operators, relations, punctuation); what is thin or medium next to the others (an ordinary atom and an operator
+  like `\sin`, a closing and an opening bracket in `\left`/`\right`, ...) is a named spacer (one character). Spacing at the script sizes is only the script space (three pairs).
+* In a column narrower than a formula's first segment the strut of a formula that wraps at U+200B can be alone on a line (see "h").
 * Text mode as glyphs (`TEXT_AS_GLYPHS`, off): 98.9% of the glyphs instead of 88.7%, at the price of private-use characters on copy and
   3 bytes a character; a decision for the consumer.
