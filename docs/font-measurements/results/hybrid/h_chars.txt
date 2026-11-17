@@ -1,0 +1,21 @@
+# private-use characters per formula: old (583ecb09, font e9c82a06) and new (font 794995a4); mfchars.py
+old/font_inline.jsonl: 1128 formulas, private-use characters per formula mean 25.80 median 17 (glyphs 10.57, spacers 15.23 of which named 2.49); per glyph 2.441; bytes mean 239.2 median 134; total chars 29102, spacers 17178
+old/font_display.jsonl: 1128 formulas, private-use characters per formula mean 26.01 median 17 (glyphs 10.57, spacers 15.44 of which named 2.51); per glyph 2.460; bytes mean 270.2 median 172; total chars 29338, spacers 17414
+rsout/font_inline.jsonl: 1128 formulas, private-use characters per formula mean 11.13 median 8 (glyphs 10.57, spacers 0.56 of which named 0.45); per glyph 1.053; bytes mean 203.4 median 111; total chars 12558, spacers 634
+rsout/font_display.jsonl: 1128 formulas, private-use characters per formula mean 11.20 median 8 (glyphs 10.57, spacers 0.63 of which named 0.45); per glyph 1.059; bytes mean 225.8 median 138; total chars 12630, spacers 706
+
+# bytes (UTF-8) per formula, zstd -19 of all the formulas as one stream, elements (span, svg, wbr tags)
+inline flat raw mean 339.1 median 178 | zstd19 whole 28.65/formula | elements mean 9.33 median 5
+inline old raw mean 239.2 median 134 | zstd19 whole 29.07/formula | elements mean 3.16 median 1
+inline new raw mean 203.4 median 111 | zstd19 whole 28.13/formula | elements mean 2.66 median 1
+display flat raw mean 369.5 median 213 | zstd19 whole 28.66/formula | elements mean 9.54 median 6
+display old raw mean 270.2 median 172 | zstd19 whole 29.30/formula | elements mean 3.21 median 2
+display new raw mean 225.8 median 138 | zstd19 whole 27.68/formula | elements mean 3.21 median 2
+
+# font files
+768 /home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/KaTeXMathBlank.ttf
+344 /home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/KaTeXMathBlank.woff2
+234720 /home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/KaTeXMathRun-794995a4.ttf
+87748 /home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/KaTeXMathRun-794995a4.untransformed.woff2
+114572 /home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/KaTeXMathRun-794995a4.woff
+75016 /home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/KaTeXMathRun-794995a4.woff2

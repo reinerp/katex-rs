@@ -1,0 +1,23 @@
+== glyph positions, old (583ecb09, e9c82a06) against new (794995a4), inline
+formulas 1128 glyph sets differ 0
+glyph x px (old vs new, 19.36 px font): median 0.0134 p99 0.0470 max 0.0782; over 1/64 px: 427
+stock text x: max 0.0314 px; differing sets 0
+formula width: max 0.0781 px; over 1/64 px: 95
+height differences >0.02 px: 0
+with the zero-width spaces: formula width max 0.0781 px over 1/64: 95; height differences >0.02 px: 0
+== glyph positions, old (583ecb09, e9c82a06) against new (794995a4), display
+formulas 1128 glyph sets differ 0
+glyph x px (old vs new, 19.36 px font): median 0.0098 p99 0.0312 max 0.0470; over 1/64 px: 315
+stock text x: max 0.0157 px; differing sets 0
+formula width: max 0.0313 px; over 1/64 px: 6
+height differences >0.02 px: 0
+with the zero-width spaces: formula width max 0.0313 px over 1/64: 6; height differences >0.02 px: 0
+== pixels, old against new, inline
+dpr1: 1128 formulas: identical 474 (42.0%), no pixel >64/255 different 1055 (93.5%), median differing px 8, >200 differing px: 75
+dpr2: 1128 formulas: identical 721 (63.9%), no pixel >64/255 different 934 (82.8%), median differing px 0, >200 differing px: 218
+== pixels, old against new, display
+dpr1: 1128 formulas: identical 473 (41.9%), no pixel >64/255 different 1103 (97.8%), median differing px 8, >200 differing px: 49
+dpr2: 1128 formulas: identical 706 (62.6%), no pixel >64/255 different 1010 (89.5%), median differing px 0, >200 differing px: 183
+== old and new against the ideal positions of the encoder (font units written - ideal), display
+3365 glyphs; skipped runs 656 error (units, written - ideal): [(-1, 137), (0, 2396), (1, 832)]
+3365 glyphs; skipped runs 656 error (units, written - ideal): [(-1, 94), (0, 2814), (1, 457)]

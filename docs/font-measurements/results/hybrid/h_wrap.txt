@@ -1,0 +1,51 @@
+== corpus inline, 300 px, against KaTeX JS in geometricPrecision
+width 300: formulas that wrap in KaTeX JS: 322; same line starts: 322; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 812 of 1128 (max 30.52); text baseline marker differs (>0.05): 15 (max 16.891)
+  of the 1127 paragraphs with the same number of lines: height differs by >0.05 px in 811 (max 11.62), by >1 px in 215; baseline of the text differs in 14 (max 6.312); 1 paragraphs have another number of lines
+== corpus inline, 760 px, against KaTeX JS in geometricPrecision
+width 760: formulas that wrap in KaTeX JS: 19; same line starts: 19; different: 0 []; wrap only in hybrid: 0
+paragraph height differs (>0.05 px): 787 of 1128 (max 2.00); text baseline marker differs (>0.05): 0 (max 0.016)
+  of the 1128 paragraphs with the same number of lines: height differs by >0.05 px in 787 (max 2.00), by >1 px in 2; baseline of the text differs in 0 (max 0.016); 0 paragraphs have another number of lines
+== corpus inline, 300 px, host overflow-wrap:anywhere; word-break:break-word
+width 300: formulas that wrap in KaTeX JS: 322; same line starts: 322; different: 0 []; wrap only in hybrid: 0
+== targeted (34 formulas with stacks, \text, brackets, slashes, bars, commas), 60 px
+width 60: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 29 paragraphs with the same number of lines: height differs by >0.05 px in 28 (max 7.00), by >1 px in 24; baseline of the text differs in 0 (max 0.000); 5 paragraphs have another number of lines
+   flat design (<wbr>, nowrap):
+width 60: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+== targeted (34 formulas with stacks, \text, brackets, slashes, bars, commas), 90 px
+width 90: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 33 paragraphs with the same number of lines: height differs by >0.05 px in 32 (max 6.00), by >1 px in 28; baseline of the text differs in 0 (max 0.000); 1 paragraphs have another number of lines
+   flat design (<wbr>, nowrap):
+width 90: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+== targeted (34 formulas with stacks, \text, brackets, slashes, bars, commas), 120 px
+width 120: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 34 paragraphs with the same number of lines: height differs by >0.05 px in 33 (max 5.00), by >1 px in 25; baseline of the text differs in 0 (max 0.000); 0 paragraphs have another number of lines
+   flat design (<wbr>, nowrap):
+width 120: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+== targeted (34 formulas with stacks, \text, brackets, slashes, bars, commas), 150 px
+width 150: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 33 paragraphs with the same number of lines: height differs by >0.05 px in 32 (max 4.00), by >1 px in 26; baseline of the text differs in 0 (max 0.000); 1 paragraphs have another number of lines
+   flat design (<wbr>, nowrap):
+width 150: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+== targeted (34 formulas with stacks, \text, brackets, slashes, bars, commas), 200 px
+width 200: formulas that wrap in KaTeX JS: 31; same line starts: 31; different: 0 []; wrap only in hybrid: 0
+  of the 34 paragraphs with the same number of lines: height differs by >0.05 px in 33 (max 3.00), by >1 px in 24; baseline of the text differs in 0 (max 0.000); 0 paragraphs have another number of lines
+   flat design (<wbr>, nowrap):
+width 200: formulas that wrap in KaTeX JS: 31; same line starts: 31; different: 0 []; wrap only in hybrid: 0
+== targeted (34 formulas with stacks, \text, brackets, slashes, bars, commas), 250 px
+width 250: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 34 paragraphs with the same number of lines: height differs by >0.05 px in 31 (max 3.00), by >1 px in 22; baseline of the text differs in 0 (max 0.000); 0 paragraphs have another number of lines
+   flat design (<wbr>, nowrap):
+width 250: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+== targeted 60 px with the host overflow-wrap
+width 60: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+== old hybrid (583ecb09), 300 / 760 and 120 targeted
+width 300: formulas that wrap in KaTeX JS: 322; same line starts: 322; different: 0 []; wrap only in hybrid: 0
+  of the 1127 paragraphs with the same number of lines: height differs by >0.05 px in 811 (max 11.62), by >1 px in 215; baseline of the text differs in 14 (max 6.312); 1 paragraphs have another number of lines
+width 760: formulas that wrap in KaTeX JS: 19; same line starts: 19; different: 0 []; wrap only in hybrid: 0
+  of the 1128 paragraphs with the same number of lines: height differs by >0.05 px in 787 (max 2.00), by >1 px in 2; baseline of the text differs in 0 (max 0.016); 0 paragraphs have another number of lines
+width 60: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 34 paragraphs with the same number of lines: height differs by >0.05 px in 33 (max 7.00), by >1 px in 29; baseline of the text differs in 0 (max 0.000); 0 paragraphs have another number of lines
+width 120: formulas that wrap in KaTeX JS: 33; same line starts: 33; different: 0 []; wrap only in hybrid: 0
+  of the 34 paragraphs with the same number of lines: height differs by >0.05 px in 33 (max 5.00), by >1 px in 25; baseline of the text differs in 0 (max 0.000); 0 paragraphs have another number of lines

@@ -1,0 +1,4 @@
+# server render time of the corpus with the step on (mfsrv2.sh: each formula rendered 25 times in the harness, the median per formula, the minimum over 5 rounds, rounds interleaved; load 2.8)
+inline  flat mean 94.3 us, old hybrid (583ecb09) 74.7 us, new hybrid 76.2 us; new/old 1.021 (median per formula 1.020), new/flat 0.808
+display flat mean 97.0 us, old hybrid 75.4 us, new hybrid 75.7 us; new/old 1.004 (median per formula 1.002), new/flat 0.780
+before the order by x was skipped where it is the order of the document and the cost of a spacer was counted without building it: new/old 1.114 inline, 1.097 display

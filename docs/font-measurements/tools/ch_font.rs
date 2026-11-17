@@ -90,7 +90,18 @@ fn main() {
     let go = |tex: &str, d: bool| {
         let s = settings(d, &mode);
         catch_unwind(AssertUnwindSafe(|| {
-            if std::env::var_os("MATHRUN_MISSING").is_some() {
+            if std::env::var_os("MATHRUN_SPACES").is_some() {
+                let (r, sp) = katex::mathrun::collect_spaces(|| render_to_string(&ctx, tex, &s).map_err(|e| e.to_string()));
+                for n in sp { eprintln!("SPACE {n}"); }
+                r
+            } else if std::env::var_os("MATHRUN_RUNS").is_some() {
+                let (r, runs) = katex::mathrun::collect_runs(|| render_to_string(&ctx, tex, &s).map_err(|e| e.to_string()));
+                for (gl, w) in runs {
+                    let g: Vec<String> = gl.iter().map(|g| format!("[{},{},{},{},{}]", g.0, g.1, g.2, g.3, g.4)).collect();
+                    eprintln!("RUN [{}] {}", g.join(","), w);
+                }
+                r
+            } else if std::env::var_os("MATHRUN_MISSING").is_some() {
                 let (r, miss) = katex::mathrun::collect_missing_variants(|| render_to_string(&ctx, tex, &s).map_err(|e| e.to_string()));
                 for m in miss { eprintln!("MISS {} {} {} {}", m.0, m.1, m.2, m.3); }
                 r
@@ -102,7 +113,7 @@ fn main() {
     for (_, d, t) in &items { let _ = go(t, disp(*d)); }
     let mut out = std::io::BufWriter::new(std::fs::File::create(&a[3]).unwrap());
     for (id, d, t) in &items {
-        if std::env::var_os("MATHRUN_MISSING").is_some() { eprintln!("ID {id}"); }
+        if std::env::var_os("MATHRUN_MISSING").is_some() || std::env::var_os("MATHRUN_RUNS").is_some() { eprintln!("ID {id}"); }
         let mut times = Vec::new();
         let mut res = None;
         for _ in 0..reps {

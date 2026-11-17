@@ -1,0 +1,61 @@
+# the gaps before and after the glyphs of the classes TeX spaces, in the runs of the old encoder (mfclasses.py; font units, 4,000 to the em)
+rel 3360
+    ('K', 'K') 1928
+    ('K+S', 'K') 840
+    (1111, 'K') 336
+    (0, 'K') 104
+    (0, 0) 68
+    (-3112, 'K') 20
+    ('K', -3112) 16
+    (780, 781) 8
+    (1529, 'K') 8
+    (1511, 'K') 8
+    (2222, 2223) 4
+    ('K', -2222) 4
+    (0, 781) 4
+    ('K+S', -3112) 4
+    (1941, 'K') 4
+    (0, -3112) 2
+bin 3076
+    ('M', 'M') 1476
+    ('M+S', 'M') 1120
+    (0, 0) 204
+    (889, 'M') 120
+    (0, 'T') 60
+    (1288, 'M') 28
+    (1289, 'M') 24
+    ('K', 'T') 12
+    (4889, 4889) 4
+    (1719, 'M') 4
+    (1575, 'M') 4
+    (422, 222) 4
+    (222, 222) 4
+    (667, 0) 4
+    ('S', 'T') 4
+    ('T+.2', 0) 2
+punct 3648
+    (0, 'T') 1556
+    (0, 0) 984
+    ('S', 0) 388
+    ('S', 'T') 316
+    (0, 'qq+T') 172
+    ('T', 'T') 60
+    ('S', 'qq+T') 48
+    ('T', 0) 40
+    (0, 4667) 24
+    (-1, 'T') 12
+    (400, 'T') 12
+    ('S', 1778) 8
+    (0, 1778) 4
+    (1, 'qq+T') 4
+    (0, 4666) 4
+    (3214, 0) 4
+
+# the named spacers: mfnamed.py (greedy; code points saved on the corpus, inline and display, each counted twice by the harness's warm-up run)
+named 25: 2899 saves 30
+code points after 2800
+named 23: -4223 saves 30
+code points after 2630
+
+# the script glyphs followed by the script space: mfscriptspace.py
+script glyphs followed by the script space: 5644 ; pairs 3 cover 0.9539333805811481

@@ -5,25 +5,31 @@ sys.path.insert(0, '/home/agents/scratch/katex-font/tools'); sys.path.insert(0, 
 from cu import *
 from mathfont_encode import Encoder
 rs, out, W = sys.argv[1], sys.argv[2], int(sys.argv[3]); os.makedirs(out, exist_ok=True); KAUTO = 'ktauto' in sys.argv; FLAT = 'flat' in sys.argv
-D = '/home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/'
+D = '/home/agents/scratch/katex-font/old/data/' if 'oldfont' in sys.argv else '/home/agents/workspaces/katex-rs-font/crates/katex/data/math-font/'
 mapf = [D + f for f in os.listdir(D) if f.endswith('.map.json')][0]; fontf = mapf.replace('.map.json', '.woff2')
 enc = Encoder(mapf); rev = {}
 for (f, c), (cp, ad, ic, noic, alt) in enc.base.items():
     rev[cp] = c
     if noic: rev[noic] = c
 for (f, c, s, y), (cp, ad) in enc.var.items(): rev[cp] = c
+for b in json.load(open(mapf)).get('baked', []): rev[b[6]] = b[1]
 F = {f['id']: f for f in map(json.loads, open('/home/agents/scratch/katex-harden/data/formulas.jsonl'))}
+CUS = [a[7:] for a in sys.argv if a.startswith('custom=')]
+if CUS:
+    for k, t in enumerate(open(CUS[0])):
+        if t.strip(): F[100000 + k] = {'id': 100000 + k, 'tex': t.rstrip('\n'), 'display': False}
 R = {}
 for l in open(rs):
     j = json.loads(l)
     if 'html' in j and not F[j['id']]['display'] or ('html' in j and True): R[j['id']] = j['html']
-css = open('/home/agents/scratch/katex-font/rsout/' + ('flat.css' if FLAT else 'font.css')).read().replace('url(MathRun.woff2)', 'url(file://%s)' % os.path.abspath(fontf)).replace('url(fonts/', 'url(file:///home/agents/scratch/katex-compact/css/fonts/')
+css = open('/home/agents/scratch/katex-font/rsout/' + ('flat.css' if FLAT else ('font_old.css' if 'oldfont' in sys.argv else 'font.css'))).read().replace('url(MathRun.woff2)', 'url(file://%s)' % os.path.abspath(fontf)).replace('url(fonts/', 'url(file:///home/agents/scratch/katex-compact/css/fonts/')
 base = 'body{margin:0;font:16px/1.5 system-ui,sans-serif}.row{width:%dpx;padding:6px 20px;margin:0;border-bottom:1px solid #ccc}.bl{display:inline-block;width:0;height:0}' % W
+if 'owa' in sys.argv: base += '.row{overflow-wrap:anywhere;word-break:break-word}'
 JS0 = r'''window.SK=new Set(SPACERS);window.info=function(){const out=[];for(const row of document.querySelectorAll('.row')){const r0=row.getBoundingClientRect();const k=row.querySelector('.katex');const bl=row.querySelector('.bl').getBoundingClientRect();
 const kr=k?k.getBoundingClientRect():null;const starts=[];if(k){const w=document.createTreeWalker(k,NodeFilter.SHOW_TEXT);let n;const rg=document.createRange();let prev=null;
-while(n=w.nextNode()){const t=n.nodeValue;for(let i=0;i<t.length;i++){const cp=t.codePointAt(i);const len=cp>0xffff?2:1;if(cp===0x20||cp===0xa0||cp===0x200b||SK.has(cp)){i+=len-1;continue}
+while(n=w.nextNode()){const t=n.nodeValue;for(let i=0;i<t.length;i++){const cp=t.codePointAt(i);const len=cp>0xffff?2:1;if(cp===0x20||cp===0xa0||cp===0x200b||cp===0x2060||cp===0x202f||SK.has(cp)){i+=len-1;continue}
 rg.setStart(n,i);rg.setEnd(n,i+len);const b=rg.getBoundingClientRect();i+=len-1;
-if(prev&&b.left<prev.left-1&&b.bottom>prev.bottom+12)starts.push(cp);prev=b}}}
+if(prev&&b.left<prev.left+1&&b.bottom>prev.bottom+12)starts.push(cp);prev=b}}}
 out.push({id:+row.dataset.id,h:r0.height,base:bl.bottom-r0.top,katex:kr?[kr.left-r0.left,kr.top-r0.top,kr.right-r0.left,kr.bottom-r0.top]:null,starts})}return JSON.stringify(out)}'''
 spacers = sorted(set(enc.pos.values()) | set(enc.neg.values()) | {cp for n, cp in enc.named} | {cp for (f, c), (cp, ad, ic, noic, alt) in enc.base.items() if c in (0x20, 0xA0)})
 JS = 'var SPACERS=%s;' % json.dumps(spacers) + JS0

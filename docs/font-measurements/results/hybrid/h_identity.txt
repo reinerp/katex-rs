@@ -1,0 +1,10 @@
+FONT_RUN off, mode compact inline 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode compact_262143 inline 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode compact_32767 inline 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode legacy inline 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode html inline 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode compact display 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode compact_262143 display 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode compact_32767 display 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode legacy display 1128 formulas, differ from 583ecb09: 0
+FONT_RUN off, mode html display 1128 formulas, differ from 583ecb09: 0

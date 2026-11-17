@@ -50,5 +50,14 @@ done
 # 5. speed: pages (floor / flat / hybrid) and the interleaved runs (evalb.sh: micro formulas and the fixture), the server
 ./sxc python3 $T/mfbench3.py && $T/evalb.sh
 $T/mfsrv.sh $S/bench_srv 5 25
+# 5b. the second hybrid stage (spacing in the glyphs, line breaks as characters) against the output of the commit before it: build that commit
+#     (a jj workspace at 583ecb09 and the harness crate against it: tools/ch_font.rs without the collectors), render the corpus with it into old/font_{inline,display}.jsonl,
+#     copy its font and stylesheet to old/data/ and rsout/font_old.css, then
+#       ./sxc python3 $T/mfpos.py old/font_inline.jsonl old/data/KaTeXMathRun-<old>.map.json old/data/KaTeXMathRun-<old>.woff2 rsout/font_old.css \
+#               rsout/font_inline.jsonl $C/data/math-font/KaTeXMathRun-*.map.json $C/data/math-font/KaTeXMathRun-*.woff2 rsout/font.css inline posF_inline
+#       ./sxc python3 $T/mfold.py old/font_inline.jsonl rsout/font_old.css old/data/KaTeXMathRun-<old>.woff2 rsout/font_inline.jsonl rsout/font.css \
+#               $C/data/math-font/KaTeXMathRun-*.woff2 inline pixF_inline
+#       ./sxc python3 $T/mfwrap.py rsout/font_inline.jsonl wrapF_300 300; ... custom=$T/targeted.tex ...
+#     micro and fixture pages: python3 $T/mfbench4.py bench4 && $T/evalb4.sh; server: $T/mfsrv2.sh $S/bench_srv2 5 25
 # 6. tests
 ./sxr cargo test --offline

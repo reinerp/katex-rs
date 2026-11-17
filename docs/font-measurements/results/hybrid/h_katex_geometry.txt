@@ -1,0 +1,12 @@
+== against KaTeX JS 0.18.5 (geometricPrecision), inline
+console []
+formulas 1128 identity matched 1111
+glyph x px: median 0.0157 p95 0.0623 p99 0.1094 max 0.2813
+stock text top px: median 0.0000 p95 0.0000 p99 4.0000 max 4.0000
+width px: median 0.0156 p95 0.0469 p99 0.0938 max 0.2656
+== against KaTeX JS 0.18.5 (geometricPrecision), display
+console []
+formulas 365 identity matched 351
+glyph x px: median 0.0312 p95 0.0625 p99 0.0939 max 0.1562
+stock text top px: median 0.0000 p95 0.0157 p99 4.0000 max 4.0000
+width px: median 0.0000 p95 0.0000 p99 0.0000 max 0.0000

@@ -18,6 +18,10 @@ for (f, c), (cp, ad, ic, noic, alt) in enc.base.items():
     rev[cp] = (c, 1.0, 0.0)
     if noic: rev[noic] = (c, 1.0, 0.0)
 for (f, c, s, y), (cp, ad) in enc.var.items(): rev[cp] = (c, s, y)
+BAKEDL = {}
+for b in json.load(open(mapf)).get('baked', []):
+    rev[b[6]] = (b[1], b[2], b[3]); BAKEDL[b[6]] = b[4]
+UPEM = json.load(open(mapf))['unitsPerEm']
 F = {f['id']: f for f in map(json.loads, open('/home/agents/scratch/katex-harden/data/formulas.jsonl'))}
 if a.custom:
     for k, t in enumerate(open(a.custom)):
@@ -57,7 +61,7 @@ window.rowsInfo = function() { return JSON.stringify([...document.querySelectorA
 for ci in range(0, len(rows), CH):
     part = rows[ci:ci + CH]
     kp = '<!doctype html><meta charset=utf-8><link rel=stylesheet href="file:///home/agents/scratch/katex-font/katex/katex.min.css"><style>%s%s%s%s</style><div id=c></div><script src="file:///home/agents/scratch/katex-font/katex/katex.min.js"></script><script>%s const T=%s;const c=document.getElementById("c");for(const [l,t] of T){const d=document.createElement("div");d.className="row";d.dataset.l=l;d.innerHTML=katex.renderToString(t,{displayMode:%s,output:"html",throwOnError:false,maxExpand:1000});c.appendChild(d)}</script>' % (base, '' if a.ktauto else '.katex{text-rendering:geometricPrecision!important}', fixd, a.extra, GEOMJS, json.dumps([[i, F[i]['tex']] for i, _ in part]), 'true' if disp else 'false')
-    fp = '<!doctype html><meta charset=utf-8><style>%s%s%s%s</style><script>%s</script><div id=c>%s</div>' % (base, css, fixd, a.extra, GEOMJS, ''.join('<div class=row data-l="%s">%s</div>' % (i, h) for i, h in part))
+    fp = '<!doctype html><meta charset=utf-8><style>%s%s%s%s</style><script>%s</script><div id=c>%s</div>' % (base, css, fixd, a.extra, GEOMJS, ''.join('<div class=row data-l="%s">%s</div>' % (i, h.replace('\u200b', '')) for i, h in part))
     open('%s/k_%03d.html' % (a.out, ci // CH), 'w').write(kp); open('%s/f_%03d.html' % (a.out, ci // CH), 'w').write(fp)
 metr = {}
 with chrome(a.port) as c:
@@ -88,7 +92,7 @@ for ci in range(0, len(rows), CH):
             if 0xE000 <= cp <= 0xF8FF or cp >= 0xF0000:
                 if cp not in rev: continue   # a spacer glyph
                 ch, sz, y = rev[cp]
-                ft[(ch, round(sz * s, 2))].append((x, None)); nrun += 1
+                ft[(ch, round(sz * s, 2))].append((x + BAKEDL.get(cp, 0) / UPEM * s, None)); nrun += 1
             else:
                 ft[(cp, round(s, 2))].append((x, top)); nstock += 1
         dx = dtop = 0.0; ok = True; unmatched = 0; bad = []
