@@ -80,7 +80,7 @@ impl Default for FontMetricsData {
         let blob: &[u8] = include_bytes!("generated/font_metrics_packed.bin");
         let n = PACKED_FONTS.len();
         let mut pos = n * 2;
-        let mut next = |pos: &mut usize| -> u32 {
+        let next = |pos: &mut usize| -> u32 {
             let mut v = 0_u32;
             let mut shift = 0;
             loop {

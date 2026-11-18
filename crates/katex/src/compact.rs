@@ -161,40 +161,43 @@ impl El {
     }
 }
 
+/// [`convert`] of a span.
+fn convert_span(span: &DomSpan, depth: usize, sf: Rounding) -> Option<Node> {
+    let mut kids = Vec::with_capacity(span.children.len());
+    for child in &span.children {
+        push_node(&mut kids, convert(child, depth + 1, sf)?);
+    }
+    let mut style: Vec<(&'static str, String)> = span
+        .style
+        .iter()
+        .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
+        .collect();
+    if let Some(w) = span.width
+        && span.classes.contains("vlist-t")
+    {
+        // `crate::sizes` computed it; `to_inline_block` makes it the `width` of the stack
+        style.push(("--sz", ceil_em(w)));
+    }
+    Some(Node::El(El {
+        tag: Tag::Span,
+        classes: span.classes.iter().map(str::to_owned).collect(),
+        style,
+        attrs: span
+            .attributes
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        kids,
+    }))
+}
+
 /// Converts a tree; `None` if it is nested too deeply or holds a node this module does not know.
 fn convert(node: &HtmlDomNode, depth: usize, sf: Rounding) -> Option<Node> {
     if depth > MAX_DEPTH {
         return None;
     }
     Some(match node {
-        HtmlDomNode::DomSpan(span) => {
-            let mut kids = Vec::with_capacity(span.children.len());
-            for child in &span.children {
-                push_node(&mut kids, convert(child, depth + 1, sf)?);
-            }
-            let mut style: Vec<(&'static str, String)> = span
-                .style
-                .iter()
-                .map(|(p, v)| (p.as_str(), sf.apply(p.as_str(), v)))
-                .collect();
-            if let Some(w) = span.width
-                && span.classes.contains("vlist-t")
-            {
-                // `crate::sizes` computed it; `to_inline_block` makes it the `width` of the stack
-                style.push(("--sz", ceil_em(w)));
-            }
-            Node::El(El {
-                tag: Tag::Span,
-                classes: span.classes.iter().map(str::to_owned).collect(),
-                style,
-                attrs: span
-                    .attributes
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.clone()))
-                    .collect(),
-                kids,
-            })
-        }
+        HtmlDomNode::DomSpan(span) => return convert_span(span, depth, sf),
         HtmlDomNode::Anchor(anchor) => {
             let mut kids = Vec::with_capacity(anchor.children.len());
             for child in &anchor.children {
@@ -458,15 +461,19 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
         sf: settings.compact_precision,
         extents: lv & levels::ROUND_EXTENTS != 0,
     };
-    // `compact_sizes`: the widths of the stacks, computed from the tree (see `crate::sizes`).
-    #[cfg_attr(not(feature = "sizes"), allow(unused_mut))]
-    let mut tree = root.clone();
+    // `compact_sizes`: the widths of the stacks, computed from the tree (see `crate::sizes`), on a copy of it.
     #[cfg(feature = "sizes")]
-    if settings.compact_sizes {
+    let converted = if settings.compact_sizes {
+        let mut tree = root.clone();
         let sizes = crate::sizes::annotate(&mut tree, hybrid.is_some());
         LAST_SIZES.with(|l| *l.borrow_mut() = Some(sizes));
-    }
-    let Node::El(mut el) = convert(&HtmlDomNode::DomSpan(tree), 0, rounding)? else {
+        convert_span(&tree, 0, rounding)
+    } else {
+        convert_span(root, 0, rounding)
+    };
+    #[cfg(not(feature = "sizes"))]
+    let converted = convert_span(root, 0, rounding);
+    let Node::El(mut el) = converted? else {
         return None;
     };
     rewrite(&mut el, settings, rounding, hybrid.is_some());
