@@ -46,6 +46,8 @@ diagnostics = []
 # `std-float`: numbers are read and written with core's float parser and formatter. Off, `numfmt` has small routines instead (exact for what the renderer writes
 # and reads, see there), `compact_precision` is ignored, and about 25 KB of core's float code and tables are not linked in.
 std-float = []
+# `fast-hash`: the tables are hashed with a multiply-and-rotate hash instead of SipHash with random keys (smaller and faster; `MacroMap` and `KeyMap` have another type then).
+fast-hash = []
 backtrace = []
 wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "dep:console_error_panic_hook"]
 

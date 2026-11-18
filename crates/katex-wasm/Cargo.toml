@@ -11,7 +11,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-katex-rs = { path = "../katex", default-features = false }
+katex-rs = { path = "../katex", default-features = false, features = ["fast-hash"] }
 
 [features]
 default = ["bump"]

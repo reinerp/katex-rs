@@ -12,10 +12,68 @@ use std::collections::{HashMap, HashSet};
 
 use crate::types::{ParseError, ParseErrorKind};
 
+/// The hasher of the `fast-hash` feature: a multiply-and-rotate hash (as rustc's `FxHasher`) of the machine word, in place of SipHash with random keys.
+/// The renderer's tables are keyed by short strings and small integers it controls, and nothing it writes depends on the order of a table.
+#[cfg(feature = "fast-hash")]
+#[derive(Default, Clone, Copy)]
+pub struct FastHasher(usize);
+
+#[cfg(feature = "fast-hash")]
+impl FastHasher {
+    #[inline]
+    fn add(&mut self, word: usize) {
+        self.0 = (self.0.rotate_left(5) ^ word).wrapping_mul(0x9E37_79B9_usize);
+    }
+}
+
+#[cfg(feature = "fast-hash")]
+impl core::hash::Hasher for FastHasher {
+    #[inline]
+    fn write(&mut self, bytes: &[u8]) {
+        let mut chunks = bytes.chunks_exact(size_of::<usize>());
+        for c in &mut chunks {
+            let mut w = [0_u8; size_of::<usize>()];
+            w.copy_from_slice(c);
+            self.add(usize::from_le_bytes(w));
+        }
+        let rest = chunks.remainder();
+        if !rest.is_empty() {
+            let mut w = [0_u8; size_of::<usize>()];
+            w[..rest.len()].copy_from_slice(rest);
+            self.add(usize::from_le_bytes(w));
+        }
+    }
+    #[inline]
+    fn write_u8(&mut self, i: u8) {
+        self.add(usize::from(i));
+    }
+    #[inline]
+    fn write_u32(&mut self, i: u32) {
+        self.add(i as usize);
+    }
+    #[inline]
+    fn write_usize(&mut self, i: usize) {
+        self.add(i);
+    }
+    #[inline]
+    fn finish(&self) -> u64 {
+        // the top bits pick the control byte of the table: mix them in
+        (self.0.rotate_left(15) ^ self.0) as u64
+    }
+}
+
 /// Make it easier to switch between different hash backends.
+#[cfg(not(feature = "fast-hash"))]
 pub type KeyMap<K, V> = HashMap<K, V>;
 /// Alias for the default hash set.
+#[cfg(not(feature = "fast-hash"))]
 pub type KeySet<K> = HashSet<K>;
+/// Make it easier to switch between different hash backends.
+#[cfg(feature = "fast-hash")]
+pub type KeyMap<K, V> = HashMap<K, V, core::hash::BuildHasherDefault<FastHasher>>;
+/// Alias for the default hash set.
+#[cfg(feature = "fast-hash")]
+pub type KeySet<K> = HashSet<K, core::hash::BuildHasherDefault<FastHasher>>;
 /// Mapping type alias
 pub type Mapping<V> = KeyMap<String, V>;
 

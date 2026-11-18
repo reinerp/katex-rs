@@ -58,6 +58,17 @@ impl KatexContext {
     /// Set default values of functions
     #[cfg_attr(not(feature = "mathml"), inline(always))]
     pub fn define_function(&mut self, spec: FunctionDefSpec) {
+        // without MathML the builder is dropped here, where it is inlined: the pointers and what only they use stay out of the binary
+        #[cfg(not(feature = "mathml"))]
+        let spec = FunctionDefSpec {
+            mathml_builder: None,
+            ..spec
+        };
+        self.define_function_inner(spec);
+    }
+
+    #[cfg_attr(not(feature = "mathml"), inline(never))]
+    fn define_function_inner(&mut self, spec: FunctionDefSpec) {
         let data = Arc::new(FunctionSpec {
             node_type: spec.node_type,
             num_args: spec.props.num_args,
@@ -83,7 +94,6 @@ impl KatexContext {
     }
 
     /// Register only the HTML and MathML builders for a function
-    #[cfg_attr(not(feature = "mathml"), inline(always))]
     pub fn define_function_builders(
         &mut self,
         node_type: NodeType,
@@ -105,6 +115,16 @@ impl KatexContext {
     /// Set default values of environments
     #[cfg_attr(not(feature = "mathml"), inline(always))]
     pub fn define_environment(&mut self, spec: EnvDefSpec) {
+        #[cfg(not(feature = "mathml"))]
+        let spec = EnvDefSpec {
+            mathml_builder: None,
+            ..spec
+        };
+        self.define_environment_inner(spec);
+    }
+
+    #[cfg_attr(not(feature = "mathml"), inline(never))]
+    fn define_environment_inner(&mut self, spec: EnvDefSpec) {
         let data = Arc::new(EnvSpec {
             node_type: spec.node_type,
             num_args: spec.props.num_args.unwrap_or(0),
