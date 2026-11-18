@@ -1,12 +1,23 @@
-// Minimal hand-written glue for katex_wasm.wasm (no wasm-bindgen): works in a browser (instance given) and in node.
-// mode: 0 legacy, 1 html, 2 flat, 3 font, 4 font + compact_line, 5 flat + compact_line
+// Hand-written glue for katex.wasm (crates/katex-wasm, no wasm-bindgen); works in a browser (instance given) and in node.
+// KatexWasm.load(url): fetch and instantiate (streaming where the server says application/wasm). render(tex, display, mode): HTML string.
+// mode: 3 hybrid font runs, 4 hybrid + compact_line (the shipped bundle); with the `full` feature also 0 legacy (HTML+MathML), 1 stock HTML, 2 flat, 5 flat + compact_line
 class KatexWasm {
+  static async load(url) {
+    const r = await WebAssembly.instantiateStreaming(fetch(url), {});
+    return new KatexWasm(r.instance);
+  }
   constructor(instance) {
     this.x = instance.exports; this.enc = new TextEncoder(); this.dec = new TextDecoder();
     this.cap = 1 << 16; this.inp = this.x.alloc(this.cap);
     this.stat = { encode: 0, decode: 0, call: 0 };
   }
   mem() { return new Uint8Array(this.x.memory.buffer); }
+  // build the context and the settings of a mode now (otherwise the first render does)
+  init(mode = 3) { this.x.init(mode); }
+  // options of the hybrid output: the TeX as aria-label (default on), the shortest formula that may wrap (default 8), the room of the host's line in em of the formula (mode 4)
+  setLabel(on) { this.x.set_label(on ? 1 : 0); }
+  setWrapMin(n) { this.x.set_wrap_min(n); }
+  setLine(ascent, descent) { this.x.set_line(ascent, descent); }
   ensure(n) { if (n > this.cap) { this.x.dealloc(this.inp, this.cap); this.cap = Math.max(n, this.cap * 2); this.inp = this.x.alloc(this.cap); } }
   // one formula: copy the TeX into wasm memory, call, decode the HTML
   render(tex, display, mode) {

@@ -18,7 +18,7 @@ default = ["bump", "hybrid-only"]
 # the bump allocator (src/bump.rs) instead of dlmalloc: the memory of a render is taken back all at once
 bump = []
 # the shipped bundle: the hybrid output only (levels::ALL | levels::FONT_RUN, with compact_line / compact_wrap_min / label); every other output and pass is left out
-hybrid-only = ["katex-rs/fixed-levels", "katex-rs/packed-metrics"]
+hybrid-only = ["katex-rs/fixed-levels", "katex-rs/packed-metrics", "katex-rs/packed-symbols"]
 # for comparison: every output mode of the native harness (stock KaTeX markup with MathML, HTML only, flat) next to the hybrid one, with core's float code
 # and Debug dumps (build with --no-default-features --features bump,full)
 full = ["katex-rs/mathml", "katex-rs/sizes", "katex-rs/std-float", "katex-rs/diagnostics"]

@@ -68,7 +68,7 @@ similar.opt-level = 3
 # The WebAssembly bundle of crates/katex-wasm (see crates/katex-wasm/build.sh): cargo build --profile wasm --target wasm32-unknown-unknown -p katex-wasm
 [profile.wasm]
 inherits = "release"
-opt-level = 3
+opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "abort"

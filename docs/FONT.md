@@ -32,7 +32,7 @@ error is the larger part of the difference), for a font of **75 KB** (WOFF 2) th
 | path | what |
 | --- | --- |
 | `crates/katex/src/mathrun.rs` | the encoder (the tree transform), the stylesheet and the accessors of the font |
-| `crates/katex/src/generated/mathrun_table.rs` | the glyph table (`tools/gen_mathrun_table.py` from the font's map), checked in |
+| `crates/katex/src/generated/mathrun_table.rs` | the layout numbers and the repertoire masks (`tools/gen_mathrun_table.py` from the font's map, which checks them against it), checked in |
 | `crates/katex/data/math-font/` | the font, `KaTeXMathRun-<version>.woff2` (ship it; the version is a hash of what the encoder depends on), its `.map.json`, `spec.json` (the inputs it was generated from), `KaTeXMathBlank.woff2` (an optional 344-byte fallback face); `.ttf`/`.woff` are debugging outputs and not checked in |
 | `crates/katex/tools/sfnt.py`, `gen_math_font.py` | the font compiler (stdlib Python): glyf outlines, cmap, GPOS, WOFF 1 and WOFF 2 with the transformed glyf/loca/hmtx |
 | `crates/katex/tools/gen_mathrun_table.py` | the glyph table of the encoder from the map |
@@ -256,6 +256,31 @@ thin space, the negative ones of stacked scripts, ...). The binary spacers write
 
 (The 16 named spacers of the first version of this design had every advance at half the value they were chosen for, so they matched
 nothing: that is a part of why `a+b+c=d` was 31 characters.)
+
+### Layout: the code points follow a rule (font `bb64ff11`)
+
+The first fonts had a table: for every base glyph, every script variant and every glyph with spacing, its code point (and advance) were listed in `mathrun_table.rs`
+(`BASE`, `VARIANTS`, `BAKED`: 93 KB of source tables, 14 KB of the WebAssembly bundle after Brotli). From `bb64ff11` the generator allocates code points by a rule that
+`mathrun.rs` computes, so the table is a few dozen numbers and the repertoires of the script variants as bit masks (`spec.json` has `"layout": "implicit"`):
+
+* the planes follow one another in the private-use area (U+E000..) in this order: positive spacers; the base glyphs of Main-Regular, Math-Italic, AMS-Regular and Size1-4
+  (`BASE_START + g`); the glyphs without the italic correction (`NOIC_START + rank` in Math-Italic, with holes); the script variants of every (size, shift) pair, the pair with most
+  glyphs first; the glyphs with spacing (a plane per class and gap pattern, one per script-space pair); the negative spacers (last, they have no entry in `hmtx`). 4,574 slots
+  of the 6,400 of the BMP area; nothing is in plane 15;
+* the **rank** of a base glyph is its index in the metrics table the renderer already has (`FontMetricsData::rank_metric`; AMS-Regular: in `AMS_CHARS`, the 47 characters of its subset), so
+  `(font, character)` to code point needs no table: `g = FONT_OFFSET[font] + rank`, code point `BASE_START + g`. The font has glyphs only for characters that have metrics (the 8 base glyphs
+  of the previous font that did not, U+2002..U+200A and one private-use character of Size4, were never used in the corpus);
+* a script variant is at the pair's plane start plus the rank of `g` in the pair's repertoire (`PAIR_MASKS`: the bits of g, popcount below g); a glyph that carries TeX's spacing at the
+  class pattern's start plus the rank of `g` in the class mask (`SPACING`); one with the script space after it likewise in the pair's script-space plane;
+* **advances are derived**: a base glyph's is `round(width * 4000) + italic correction + ADV_CORR[g]` (the correction is the difference between the font's advance, which comes from the TTF, and
+  the rounded advance of the metrics table: -2..2 in 565 of 580 glyphs, the others are glyphs whose metrics have no width, spaces and the like; it keeps every glyph where it was), a script variant's `round(advance * size)` (the generator's rule), the glyph without the correction
+  `advance - correction`; spacers: `NAMED` (23 advances, sorted; the negative ones first at `NEG_NAMED_START`) and `POS_BIN_START + k`, `NEG_BIN_START + k`.
+
+`gen_mathrun_table.py` derives every code point and advance of the map by this rule and stops if one differs; `mathrun::layout_tests` do the same in Rust for the whole font (580 base glyphs,
+2,763 variants, 1,071 glyphs with spacing, the spacers). The positions of all glyphs are those of `794995a4` (`docs/font-measurements/tools/fontcmp.py` compares the maps: advances, italic corrections,
+variants and gaps of every glyph, 0 differences), and the output of the corpus, inline and display, with and without `compact_line`, is the old output with each glyph's code point replaced
+by the same glyph's in the new font (`tools/cpcmp.py`: 1,128 formulas, 12,558 glyph code points, 0 differences). The WOFF 2 is 72,508 bytes against 75,016 (74,412 with the rule and overlay
+glyphs, which nothing uses, kept: `keep_unused`); the encoder is as fast as before (a binary search in the metrics table in place of one in `BASE`; 679 against 687 ms for the fixture's 4,800 formulas in node, minimum of 20 runs).
 
 ## Results
 
