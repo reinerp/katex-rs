@@ -330,7 +330,7 @@ class Builder:
             st = plane('noic', None, size=len(mi))
             for s in self.planes['noic']: s.cp = st + rank[s.key[1]]
         scripts = sorted([p for p in self.planes if p.startswith('script:')], key=lambda p: (-len(self.planes[p]), p))
-        for p in scripts + [p for p in self.planes if p.startswith('baked:')] + ['negspacers']:
+        for p in scripts + [p for p in self.planes if p.startswith('baked:')] + ['rules', 'overlays', 'negspacers']:
             st = plane(p, self.planes.get(p, []))
             for i, s in enumerate(self.planes.get(p, [])): s.cp = st + i
         for p in self.planes:
