@@ -145,6 +145,15 @@ impl<K: Key, V> Map<K, V> {
         self.find(key).map(|(_, value)| value)
     }
 
+    /// Returns the index of `key` in the key order, and its value.
+    pub fn position(&self, key: &K::Borrowed) -> Option<(usize, &'static V)> {
+        let entries = self.entries;
+        let index = entries
+            .binary_search_by(|(k, _)| k.borrowed().cmp(key))
+            .ok()?;
+        Some((index, &entries[index].1))
+    }
+
     /// Returns the stored key and value for `key`.
     pub fn get_entry(&self, key: &K::Borrowed) -> Option<(&'static K, &'static V)> {
         self.find(key).map(|(k, value)| (k, value))

@@ -147,6 +147,27 @@ impl FontMetricsData {
         }))
     }
 
+    /// The metrics of a character of a built-in font family and its index among the characters of that family (in character order):
+    /// what the generated font of [`crate::mathrun`] ranks its glyphs by.
+    pub(crate) fn rank_metric(
+        &self,
+        font_family: &str,
+        char_code: u32,
+    ) -> Option<(usize, &CharacterMetrics)> {
+        #[cfg(feature = "packed-metrics")]
+        {
+            let (_, entries) = self.packed.iter().find(|(name, _)| *name == font_family)?;
+            let i = entries.binary_search_by_key(&char_code, |e| e.0).ok()?;
+            Some((i, &entries[i].1))
+        }
+        #[cfg(not(feature = "packed-metrics"))]
+        {
+            FONT_METRICS_INDEX
+                .get(font_family)?
+                .position(&char_code)
+        }
+    }
+
     /// Create a new FontMetricsData instance with optional custom metrics
     pub fn add_custom_metrics(
         &mut self,

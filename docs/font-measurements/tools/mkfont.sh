@@ -20,7 +20,7 @@ spec() {   # spec [EXTRA.json]: the build's spec: 64 pairs, closure for the top 
   python3 -B - <<'P'
 import json
 s = json.load(open('spec_mk.json'))
-s['overlays'] = json.load(open('data/overlays.json')); s['rules'] = [[0.04, 0.23]]; s['pua_only'] = True; s['alt_letters'] = False
+s['overlays'] = json.load(open('data/overlays.json')); s['rules'] = [[0.04, 0.23]]; s['pua_only'] = True; s['alt_letters'] = False; s['layout'] = 'implicit'
 s['spacers'] = {}
 json.dump(s, open('spec_mk.json', 'w'), separators=(',', ':'))
 P

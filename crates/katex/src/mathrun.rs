@@ -38,6 +38,7 @@ use core::fmt::Write as _;
 
 use crate::compact;
 use crate::dom_tree::{DomSpan, HtmlDomNode, SymbolNode};
+use crate::font_metrics_data::FontMetricsData;
 use crate::types::{ClassList, CssStyle, Settings};
 
 include!("generated/mathrun_table.rs");
@@ -128,7 +129,9 @@ enum Family {
 
 /// What a span's classes set for the text inside it.
 #[derive(Clone, Copy)]
-struct Ctx {
+struct Ctx<'a> {
+    /// The metrics tables that rank the glyphs of the font (see "Layout" in docs/FONT.md).
+    fm: &'a FontMetricsData,
     /// The font size relative to the element that holds the run.
     size: f64,
     /// The baseline's height above that element's baseline, in em of that element.
@@ -230,37 +233,82 @@ fn font_id(family: Family, italic: bool) -> Option<u8> {
     }
 }
 
-fn base_entry(font: u8, ch: u32) -> Option<&'static (u8, u32, u32, i32, i32, u32, u32)> {
-    let i = BASE
-        .binary_search_by(|e| (e.0, e.1).cmp(&(font, ch)))
-        .ok()?;
-    BASE.get(i)
+/// A base glyph of the font: its code point, its advance with the italic correction, the italic correction, the code point of the twin
+/// without it (0: none) and its index g among all base glyphs (the bit of its repertoires).
+struct Base {
+    cp: u32,
+    adv: i32,
+    ic: i32,
+    noic: u32,
+    g: usize,
 }
 
-/// The variant of a glyph at a size and shift, if the font has one within [`SHIFT_TOLERANCE`].
-fn variant_entry(
-    font: u8,
-    ch: u32,
-    size: f64,
-    y: f64,
-) -> Option<&'static (u8, u32, u16, i16, u32, i32)> {
+/// The font's base glyph of a character, if it has one. Everything is derived by the rule of the layout (`gen_math_font.py`, "implicit"): its
+/// plane and its rank in the font's metrics table (AMS-Regular: in `AMS_CHARS`) give the code point, the metrics its advance.
+fn base_entry(fm: &FontMetricsData, font: u8, ch: u32) -> Option<Base> {
+    let family = FONT_FAMILIES[usize::from(font)];
+    let (rank, m) = if family == "AMS-Regular" {
+        let i = AMS_CHARS.binary_search(&u16::try_from(ch).ok()?).ok()?;
+        (i, fm.rank_metric(family, ch)?.1)
+    } else {
+        fm.rank_metric(family, ch)?
+    };
+    let g = usize::from(FONT_OFFSET[usize::from(font)]) + rank;
+    let ic = if family == "Math-Italic" && m.italic > 0.0 {
+        (m.italic * UPEM as f64).round_ties_even() as i32
+    } else {
+        0
+    };
+    let adv = (m.width * UPEM as f64).round_ties_even() as i32 + ic + i32::from(ADV_CORR[g]);
+    Some(Base {
+        cp: BASE_START + g as u32,
+        adv,
+        ic,
+        noic: if ic > 0 { NOIC_START + rank as u32 } else { 0 },
+        g,
+    })
+}
+
+/// The index of g among the set bits of a mask below it.
+fn rank_in(mask: &[u64], g: usize) -> u32 {
+    let (word, bit) = (g / 64, g % 64);
+    let below: u32 = mask[..word].iter().map(|w| w.count_ones()).sum();
+    below + (mask[word] & ((1u64 << bit) - 1)).count_ones()
+}
+
+fn has(mask: &[u64], g: usize) -> bool {
+    mask[g / 64] >> (g % 64) & 1 == 1
+}
+
+/// The pairs of (size, shift) with this size in thousandths: a range of [`PAIRS`] (sorted by size, then shift).
+fn pairs_of_size(size_milli: u16) -> core::ops::Range<usize> {
+    let start = PAIRS.partition_point(|p| p.0 < size_milli);
+    let end = PAIRS.partition_point(|p| p.0 <= size_milli);
+    start..end
+}
+
+/// The variant of a glyph at a size and shift, if the font has one within [`SHIFT_TOLERANCE`]: its code point and advance.
+fn variant_entry(fm: &FontMetricsData, font: u8, ch: u32, size: f64, y: f64) -> Option<(u32, i32)> {
     let size_milli = (size * 1000.0).round();
     if !(1.0..=65535.0).contains(&size_milli) {
         return None;
     }
-    let key = (font, ch, size_milli as u16);
-    let start = VARIANTS.partition_point(|e| (e.0, e.1, e.2) < key);
-    let mut best: Option<(&(u8, u32, u16, i16, u32, i32), f64)> = None;
-    for e in VARIANTS.get(start..)? {
-        if (e.0, e.1, e.2) != key {
-            break;
+    let size_milli = size_milli as u16;
+    let base = base_entry(fm, font, ch)?;
+    let mut best: Option<(usize, f64)> = None;
+    for i in pairs_of_size(size_milli) {
+        if !has(&PAIR_MASKS[i], base.g) {
+            continue;
         }
-        let d = (f64::from(e.3) / 1000.0 - y).abs();
+        let d = (f64::from(PAIRS[i].1) / 1000.0 - y).abs();
         if d <= SHIFT_TOLERANCE && best.is_none_or(|(_, bd)| d < bd) {
-            best = Some((e, d));
+            best = Some((i, d));
         }
     }
-    best.map(|(e, _)| e)
+    let (i, _) = best?;
+    let cp = PAIRS[i].2 + rank_in(&PAIR_MASKS[i], base.g);
+    let adv = (f64::from(base.adv) * (f64::from(size_milli) / 1000.0)).round_ties_even() as i32;
+    Some((cp, adv))
 }
 
 /// The classes of a span or symbol: font, size and position changes it makes. `strict`: `None` for any class this module
@@ -417,7 +465,7 @@ impl Walker {
                 continue;
             }
             let font = font_id(ctx.family, ctx.italic)?;
-            let entry = base_entry(font, u32::from(ch))?;
+            let entry = base_entry(ctx.fm, font, u32::from(ch))?;
             let glyph = Glyph {
                 font,
                 ch: u32::from(ch),
@@ -425,9 +473,9 @@ impl Walker {
                 x: self.x,
                 y: ctx.y,
             };
-            lookup(&glyph, false, false)?;
+            lookup(ctx.fm, &glyph, false)?;
             self.items.push(glyph);
-            self.x += f64::from(entry.3 - entry.4) / UPEM as f64 * ctx.size;
+            self.x += f64::from(entry.adv - entry.ic) / UPEM as f64 * ctx.size;
         }
         self.x += (symbol.italic + right) * ctx.size;
         Some(())
@@ -625,6 +673,18 @@ fn popcount_cost(units: i64) -> usize {
     (n / max) as usize + (n % max).count_ones() as usize
 }
 
+/// The named spacers: (advance in font units, code point), by advance.
+fn named() -> impl Iterator<Item = (i32, u32)> {
+    NAMED.iter().enumerate().map(|(i, n)| {
+        let cp = if i < NEG_NAMED {
+            NEG_NAMED_START + i as u32
+        } else {
+            POS_NAMED_START + (i - NEG_NAMED) as u32
+        };
+        (*n, cp)
+    })
+}
+
 /// How to move the cursor by `units`, to within `tol`: the number of code points, the named spacer (its advance and code point)
 /// and the rest, which binary spacers write.
 fn spacer_plan(units: i64, tol: i64) -> (usize, i64, Option<u32>, i64) {
@@ -633,10 +693,9 @@ fn spacer_plan(units: i64, tol: i64) -> (usize, i64, Option<u32>, i64) {
     }
     let mut best: Option<(usize, i64, Option<u32>, i64)> = None;
     let candidates = std::iter::once((0i64, None)).chain(
-        NAMED
-            .iter()
+        named()
             .filter(|(n, _)| (*n > 0) == (units > 0) && i64::from(n.abs()) <= units.abs() + tol)
-            .map(|(n, cp)| (i64::from(*n), Some(*cp))),
+            .map(|(n, cp)| (i64::from(n), Some(cp))),
     );
     for (n, cp) in candidates {
         let mut rem = units - n;
@@ -662,14 +721,14 @@ fn spacer(units: i64, tol: i64) -> (Vec<u32>, i64) {
         out.push(cp);
         moved += n;
     }
-    let table = if rem > 0 { &POS } else { &NEG };
+    let bin = if rem > 0 { POS_BIN_START } else { NEG_BIN_START };
     let mut left = rem.abs();
     let mut k = 14usize;
     while left > 0 {
         while (1i64 << k) > left {
             k -= 1;
         }
-        out.push(table[k]);
+        out.push(bin + k as u32);
         left -= 1 << k;
         moved += rem.signum() * (1 << k);
     }
@@ -677,18 +736,15 @@ fn spacer(units: i64, tol: i64) -> (Vec<u32>, i64) {
 }
 
 /// The code point and advance of a glyph, if the font has it there.
-fn lookup(g: &Glyph, no_ic: bool, alt: bool) -> Option<(u32, i64)> {
+fn lookup(fm: &FontMetricsData, g: &Glyph, no_ic: bool) -> Option<(u32, i64)> {
     if (g.size - 1.0).abs() < 1e-6 && g.y.abs() < 0.0006 {
-        let e = base_entry(g.font, g.ch)?;
-        if no_ic && e.5 != 0 {
-            return Some((e.5, i64::from(e.3 - e.4)));
+        let e = base_entry(fm, g.font, g.ch)?;
+        if no_ic && e.noic != 0 {
+            return Some((e.noic, i64::from(e.adv - e.ic)));
         }
-        if alt && e.6 != 0 {
-            return Some((e.6, i64::from(e.3)));
-        }
-        return Some((e.2, i64::from(e.3)));
+        return Some((e.cp, i64::from(e.adv)));
     }
-    let Some(e) = variant_entry(g.font, g.ch, g.size, g.y) else {
+    let Some((cp, adv)) = variant_entry(fm, g.font, g.ch, g.size, g.y) else {
         MISSING.with(|m| {
             if let Some(list) = m.borrow_mut().as_mut() {
                 list.push((
@@ -701,7 +757,7 @@ fn lookup(g: &Glyph, no_ic: bool, alt: bool) -> Option<(u32, i64)> {
         });
         return None;
     };
-    Some((e.4, i64::from(e.5)))
+    Some((cp, i64::from(adv)))
 }
 
 fn units(em: f64) -> i64 {
@@ -716,30 +772,46 @@ struct Cand {
     cp: u32,
 }
 
-/// The ways to write a glyph, appended to `out` (the plain glyph first, then the ones of [`BAKED`] that carry a gap), and the
-/// advance of the plain one.
-fn candidates(g: &Glyph, no_ic: bool, alt: bool, out: &mut Vec<Cand>) -> Option<i64> {
-    let (cp, adv) = lookup(g, no_ic, alt)?;
+/// The ways to write a glyph, appended to `out` (the plain glyph first, then the glyphs that carry a gap: those of [`SPACING`] and the script-space
+/// ones of [`PAIRS`], by shift, then by gaps), and the advance of the plain one.
+fn candidates(fm: &FontMetricsData, g: &Glyph, no_ic: bool, out: &mut Vec<Cand>) -> Option<i64> {
+    let (cp, adv) = lookup(fm, g, no_ic)?;
     out.push(Cand {
         left: 0,
         right: 0,
         cp,
     });
-    if !no_ic && !alt {
+    if !no_ic {
         let size = (g.size * 1000.0).round();
         if (1.0..=65535.0).contains(&size) {
-            let key = (g.font, g.ch, size as u16);
-            let start = BAKED.partition_point(|e| (e.0, e.1, e.2) < key);
-            for e in BAKED.get(start..).unwrap_or_default() {
-                if (e.0, e.1, e.2) != key {
-                    break;
+            let size = size as u16;
+            let base = base_entry(fm, g.font, g.ch)?;
+            if size == 1000 {
+                // TeX's spacing, at no shift
+                if (0.0 - g.y).abs() <= SHIFT_TOLERANCE {
+                    for (left, right, start, mask) in &SPACING {
+                        if has(mask, base.g) {
+                            out.push(Cand {
+                                left: i64::from(*left),
+                                right: i64::from(*right),
+                                cp: start + rank_in(mask, base.g),
+                            });
+                        }
+                    }
                 }
-                if (f64::from(e.3) / 1000.0 - g.y).abs() <= SHIFT_TOLERANCE {
-                    out.push(Cand {
-                        left: i64::from(e.4),
-                        right: i64::from(e.5),
-                        cp: e.6,
-                    });
+            } else {
+                for i in pairs_of_size(size) {
+                    let (_, shift, _, script_space) = PAIRS[i];
+                    if script_space != 0
+                        && has(&PAIR_MASKS[i], base.g)
+                        && (f64::from(shift) / 1000.0 - g.y).abs() <= SHIFT_TOLERANCE
+                    {
+                        out.push(Cand {
+                            left: 0,
+                            right: i64::from(SCRIPT_GAP),
+                            cp: script_space + rank_in(&PAIR_MASKS[i], base.g),
+                        });
+                    }
                 }
             }
         }
@@ -773,7 +845,7 @@ fn ordered(glyphs: &[Glyph], by_x: bool) -> Vec<&Glyph> {
 ///
 /// Every glyph is its plain glyph or a glyph of [`BAKED`] that carries the gap before it and after it. Which, is decided for the
 /// whole run: the fewest code points, a gap written once (a glyph that carries the gap after it leaves none to the next one).
-fn encode(order: &[&Glyph], width: f64, alt: bool) -> Option<(Vec<u32>, Vec<i64>)> {
+fn encode(fm: &FontMetricsData, order: &[&Glyph], width: f64) -> Option<(Vec<u32>, Vec<i64>)> {
     let tol = 1;
     let n = order.len();
     let mut xs = Vec::with_capacity(n);
@@ -787,16 +859,16 @@ fn encode(order: &[&Glyph], width: f64, alt: bool) -> Option<(Vec<u32>, Vec<i64>
         let mut no_ic = false;
         if (g.size - 1.0).abs() < 1e-6
             && g.y.abs() < 0.0006
-            && let Some(e) = base_entry(g.font, g.ch)
-            && e.4 > 0
-            && e.5 != 0
+            && let Some(e) = base_entry(fm, g.font, g.ch)
+            && e.ic > 0
+            && e.noic != 0
             && let Some(next) = order.get(pos + 1)
         {
             let nx = units(next.x);
-            no_ic = (nx - (xu + i64::from(e.3 - e.4))).abs() < (nx - (xu + i64::from(e.3))).abs();
+            no_ic = (nx - (xu + i64::from(e.adv - e.ic))).abs() < (nx - (xu + i64::from(e.adv))).abs();
         }
         first.push(cands.len());
-        advs.push(candidates(g, no_ic, alt, &mut cands)?);
+        advs.push(candidates(fm, g, no_ic, &mut cands)?);
         xs.push(xu);
     }
     first.push(cands.len());
@@ -862,22 +934,14 @@ fn encode(order: &[&Glyph], width: f64, alt: bool) -> Option<(Vec<u32>, Vec<i64>
     Some((out, asked))
 }
 
-/// The shortest writing: document order or by x, with the private-use twins of letters where a negative spacer is in it
-/// and the font has twins (a font with real letter code points).
-fn encode_best(glyphs: &[Glyph], width: f64) -> Option<(Vec<u32>, Vec<i64>)> {
-    let negative = |cps: &[u32]| {
-        cps.iter()
-            .any(|cp| NEG.contains(cp) || NAMED.iter().any(|(n, c)| *n < 0 && c == cp))
-    };
+/// The shortest writing: document order or by x.
+fn encode_best(fm: &FontMetricsData, glyphs: &[Glyph], width: f64) -> Option<(Vec<u32>, Vec<i64>)> {
     let doc = ordered(glyphs, false);
     let by_x = ordered(glyphs, true);
     let same = doc.iter().zip(&by_x).all(|(a, b)| core::ptr::eq(*a, *b));
     let mut best: Option<(Vec<u32>, Vec<i64>)> = None;
     for order in if same { vec![doc] } else { vec![doc, by_x] } {
-        let mut r = encode(&order, width, false)?;
-        if negative(&r.0) && BASE.iter().any(|e| e.6 != 0) {
-            r = encode(&order, width, true)?;
-        }
+        let r = encode(fm, &order, width)?;
         if best.as_ref().is_none_or(|b| r.0.len() < b.0.len()) {
             best = Some(r);
         }
@@ -923,13 +987,14 @@ fn run_node(cps: &[u32], width: f64) -> HtmlDomNode {
 }
 
 /// Treats the formula `root` as described in the module documentation. `None` if it is not one to treat.
-pub(crate) fn transform(root: &DomSpan, settings: &Settings) -> Option<Hybrid> {
+pub(crate) fn transform(fm: &FontMetricsData, root: &DomSpan, settings: &Settings) -> Option<Hybrid> {
     if settings.fleqn || !(root.classes.contains("katex") || root.classes.contains("katex-display"))
     {
         return None;
     }
     let chars: usize = root.children.iter().map(count_chars).sum();
     let ctx = Ctx {
+        fm,
         size: 1.0,
         y: 0.0,
         family: Family::Main,
@@ -1053,7 +1118,7 @@ fn flush(
         out.extend(nodes[start..].iter().map(|(n, _)| emit(n, ctx, depth)));
         return;
     }
-    if let Some((cps, asked)) = encode_best(&glyphs, offset) {
+    if let Some((cps, asked)) = encode_best(ctx.fm, &glyphs, offset) {
         SPACES.with(|m| {
             if let Some(list) = m.borrow_mut().as_mut() {
                 list.extend(asked);
@@ -1073,5 +1138,111 @@ fn flush(
         out.push(run_node(&cps, offset));
     } else {
         out.extend(nodes[start..].iter().map(|(n, _)| emit(n, ctx, depth)));
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    //! The layout rule (`base_entry`, `variant_entry`, `candidates`, `named`, ...) against the map that `tools/gen_math_font.py` wrote
+    //! next to the font: every code point and every advance of the whole font.
+    use super::*;
+    use crate::KatexContext;
+    use serde_json::Value;
+
+    fn map() -> Value {
+        serde_json::from_str(MAP_JSON).expect("the map is JSON")
+    }
+
+    fn font_id(name: &str) -> u8 {
+        FONT_FAMILIES.iter().position(|f| *f == name).expect("a known font") as u8
+    }
+
+    fn units(em: &Value) -> i64 {
+        (em.as_f64().unwrap() * UPEM as f64).round() as i64
+    }
+
+    #[test]
+    fn base_glyphs() {
+        let ctx = KatexContext::default();
+        let fm = &ctx.font_metrics;
+        let m = map();
+        let mut n = 0;
+        for (font, glyphs) in m["glyphs"].as_object().unwrap() {
+            for (ch, e) in glyphs.as_object().unwrap() {
+                let b = base_entry(fm, font_id(font), ch.parse().unwrap()).unwrap_or_else(|| panic!("{font}:{ch}"));
+                assert_eq!(u64::from(b.cp), e["cp"].as_u64().unwrap(), "code point of {font}:{ch}");
+                assert_eq!(i64::from(b.adv), units(&e["adv"]), "advance of {font}:{ch}");
+                assert_eq!(i64::from(b.ic), e.get("ic").map_or(0, units), "italic correction of {font}:{ch}");
+                assert_eq!(u64::from(b.noic), e.get("noic").map_or(0, |v| v.as_u64().unwrap()), "noic of {font}:{ch}");
+                n += 1;
+            }
+        }
+        assert_eq!(n, 580);
+        // characters the font does not have
+        assert!(base_entry(fm, 0, 0x2002).is_none());
+        assert!(base_entry(fm, 2, 'z' as u32).is_none());
+    }
+
+    #[test]
+    fn script_variants() {
+        let ctx = KatexContext::default();
+        let fm = &ctx.font_metrics;
+        let m = map();
+        let mut n = 0;
+        for v in m["variants"].as_array().unwrap() {
+            let (size, shift) = (v["size"].as_f64().unwrap(), v["shift"].as_f64().unwrap());
+            for (k, e) in v["glyphs"].as_object().unwrap() {
+                let (font, ch) = k.rsplit_once(':').unwrap();
+                let (cp, adv) = variant_entry(fm, font_id(font), ch.parse().unwrap(), size, shift).unwrap_or_else(|| panic!("{k} at {size} {shift}"));
+                assert_eq!(u64::from(cp), e[0].as_u64().unwrap(), "code point of {k} at {size} {shift}");
+                assert_eq!(i64::from(adv), units(&e[1]), "advance of {k} at {size} {shift}");
+                n += 1;
+            }
+        }
+        assert_eq!(n, 2763);
+    }
+
+    #[test]
+    fn glyphs_with_spacing() {
+        let ctx = KatexContext::default();
+        let fm = &ctx.font_metrics;
+        let m = map();
+        let mut expected: std::collections::BTreeMap<(u8, u32, u16, i64), Vec<(i64, i64, u64)>> = Default::default();
+        for b in m["baked"].as_array().unwrap() {
+            let b = b.as_array().unwrap();
+            let size = (b[2].as_f64().unwrap() * 1000.0).round() as u16;
+            let shift = (b[3].as_f64().unwrap() * 1000.0).round() as i64;
+            expected
+                .entry((font_id(b[0].as_str().unwrap()), b[1].as_u64().unwrap() as u32, size, shift))
+                .or_default()
+                .push((b[4].as_i64().unwrap(), b[5].as_i64().unwrap(), b[6].as_u64().unwrap()));
+        }
+        let mut n = 0;
+        for ((font, ch, size, shift), want) in &expected {
+            let g = Glyph { font: *font, ch: *ch, size: f64::from(*size) / 1000.0, x: 0.0, y: *shift as f64 / 1000.0 };
+            let mut cands = Vec::new();
+            candidates(fm, &g, false, &mut cands).unwrap();
+            let mut got: Vec<(i64, i64, u64)> = cands[1..].iter().map(|c| (c.left, c.right, u64::from(c.cp))).collect();
+            let mut want = want.clone();
+            got.sort_unstable();
+            want.sort_unstable();
+            assert_eq!(got, want, "glyphs with a gap for {font}:{ch} at {size} {shift}");
+            n += want.len();
+        }
+        assert_eq!(n, 1071);
+    }
+
+    #[test]
+    fn spacers() {
+        let m = map();
+        let sp = &m["spacers"];
+        let mut want: Vec<(i64, u64)> = sp["named"].as_object().unwrap().values().map(|e| (units(&e[1]), e[0].as_u64().unwrap())).collect();
+        want.sort_unstable();
+        let got: Vec<(i64, u64)> = named().map(|(a, cp)| (i64::from(a), u64::from(cp))).collect();
+        assert_eq!(got, want);
+        for k in 0..15u32 {
+            assert_eq!(u64::from(POS_BIN_START + k), sp["pos"][(1u32 << k).to_string()].as_u64().unwrap());
+            assert_eq!(u64::from(NEG_BIN_START + k), sp["neg"][(1u32 << k).to_string()].as_u64().unwrap());
+        }
     }
 }

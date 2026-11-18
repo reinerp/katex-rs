@@ -18,6 +18,9 @@ SPEC.json (all keys optional):
   script_space [[size, shift, gap_em], ...]: for the glyphs of those script variants a glyph with the script space after it
   pua_only     every glyph at a private-use code point (what the Rust encoder needs; default false)
   alt_letters  private-use twins of the real letters (only without pua_only)
+  layout       "implicit": code points follow a rule that the Rust encoder (src/mathrun.rs) computes, so that it needs no table of them: see "Layout" in
+               docs/FONT.md. Glyphs only for the characters that the metrics tables (data/font_metrics_data.json) have; the planes in a fixed order, glyphs of a plane
+               in the order of the source fonts (Main-Regular, Math-Italic, AMS-Regular, Size1-4) and their characters; no rules and no overlays unless keep_unused
 
 Writes NAME-<version>.ttf, .woff, .woff2 (needs the `brotli` command line tool: $BROTLI or PATH), .map.json and .css, where
 <version> is a hash of the map.
@@ -46,6 +49,7 @@ ALL_FONTS = ['Main-Regular', 'Math-Italic', 'AMS-Regular', 'Size1-Regular', 'Siz
              'Main-Bold', 'Main-Italic', 'Main-BoldItalic', 'Math-BoldItalic', 'Caligraphic-Regular', 'Caligraphic-Bold',
              'Fraktur-Regular', 'Fraktur-Bold', 'SansSerif-Regular', 'SansSerif-Bold', 'SansSerif-Italic', 'Script-Regular',
              'Typewriter-Regular']
+CANON_FONTS = ['Main-Regular', 'Math-Italic', 'AMS-Regular', 'Size1-Regular', 'Size2-Regular', 'Size3-Regular', 'Size4-Regular']
 BMP_PUA = (0xE000, 0xF8FF)
 PLANE15 = 0xF0000
 
@@ -78,7 +82,9 @@ class Builder:
         self.spec = spec
         self.dir = fonts_dir
         self.metrics = json.load(open(os.path.join(HERE, '..', 'data', 'font_metrics_data.json')))
+        self.implicit = spec.get('layout') == 'implicit'
         self.names = spec.get('fonts') or ALL_FONTS[:4]
+        if self.implicit: self.names = sorted(self.names, key=CANON_FONTS.index)
         self.ic_fonts = spec.get('ic_fonts', DEFAULT_ICFONTS)
         self.src = {n: sfnt.SourceFont(os.path.join(fonts_dir, 'KaTeX_%s.ttf' % n)) for n in self.names}
         self.slots = []          # all slots in allocation order
@@ -123,6 +129,7 @@ class Builder:
             for ch in sorted(f.cmap):
                 if ch < 0x21 and ch != 0x20: continue
                 if keep is not None and ch not in keep: continue
+                if self.implicit and self.metric(name, ch) is None: continue   # the metrics tables are the glyph's rank
                 gid = f.cmap[ch]
                 units = f.adv[gid] * K
                 ic = 0
@@ -199,6 +206,25 @@ class Builder:
         sp = self.spec
         self.baked = {}
         groups = self.symbol_groups()
+        if self.implicit:
+            # one plane per (class, pattern), the glyphs of the class in the order of the base glyphs; one per script-space pair, in the order of its script variants
+            for grp in ('bin', 'rel', 'punct'):
+                for left, right in (sp.get('spacing') or {}).get(grp, []):
+                    lu, ru = round(left * UPEM), round(right * UPEM)
+                    for (name, ch), b in self.base.items():
+                        if grp not in groups.get((name, ch), ()) or (name, ch, 1.0, 0.0, lu, ru) in self.baked: continue
+                        s = Slot((name, ch, 1.0, 0.0, lu, ru), b.adv + lu + ru, comps=[(b, lu, 0, 1.0, 1.0)])
+                        self.new_slot('baked:%s:%d:%d' % (grp, lu, ru), s)
+                        self.baked[(name, ch, 1.0, 0.0, lu, ru)] = s
+            for size, shift, gap in sp.get('script_space') or []:
+                gu = round(gap * UPEM)
+                for (name, ch, sz, sh), v in list(self.variants.items()):
+                    if sz != size or sh != shift: continue
+                    b = self.base[(name, ch)]
+                    s = Slot((name, ch, size, shift, 0, gu), v.adv + gu, comps=[(b, 0, round(shift * UPEM), round(size * 16384) / 16384, round(size * 16384) / 16384)])
+                    self.new_slot('baked:ss:%s:%s' % (size, shift), s)
+                    self.baked[(name, ch, size, shift, 0, gu)] = s
+            return
         for (name, ch), b in self.base.items():
             for grp in sorted(groups.get((name, ch), ())):
                 for left, right in (sp.get('spacing') or {}).get(grp, []):
@@ -218,7 +244,9 @@ class Builder:
 
     def add_spacers(self):
         sp = self.spec
-        for nm, em in (sp.get('spacers') or {}).items():
+        named = list((sp.get('spacers') or {}).items())
+        if self.implicit: named.sort(key=lambda t: t[1])    # by advance: the Rust side finds a named spacer's code point by its index
+        for nm, em in named:
             if em < 0:
                 s = Slot(('space', nm), 0, contours=[], neg=round(em * UPEM))
                 self.new_slot('negspacers', s)
@@ -273,7 +301,45 @@ class Builder:
             self.overlays[(o['base'], o['over'], o['dx'], o['dy'])] = s
 
     # -------- code points
+    def allocate_implicit(self):
+        """The layout the Rust encoder computes (see "Layout" in docs/FONT.md): consecutive planes, in this order: the positive spacers
+        (named, by advance, then 2^k), the base glyphs of each source font (rank in its metrics table or in the AMS subset), the
+        no-italic-correction twins (the rank of the Math-Italic glyph, with holes), the script variants of each (size, shift) pair (the
+        pair with the most glyphs first; the glyphs of its repertoire in base order), the glyphs with spacing (one plane per class and
+        gap pattern; one per script-space pair), the negative spacers (last: they have no advance entry in hmtx)."""
+        nxt = BMP_PUA[0]
+        def take(n):
+            nonlocal nxt
+            start = nxt; nxt += n
+            if nxt - 1 > BMP_PUA[1]: raise ValueError('layout does not fit the BMP private-use area: %d slots' % (nxt - BMP_PUA[0]))
+            return start
+        self.layout = OrderedDict()
+        def plane(name, slots, size=None):
+            start = take(len(slots) if size is None else size)
+            self.layout[name] = start
+            return start
+        for p in ['spacers']:
+            st = plane(p, self.planes.get(p, []))
+            for i, s in enumerate(self.planes.get(p, [])): s.cp = st + i
+        for p in [p for p in self.planes if p.startswith('base:')]:
+            st = plane(p, self.planes[p])
+            for i, s in enumerate(self.planes[p]): s.cp = st + i
+        mi = self.planes.get('base:Math-Italic', [])
+        if 'noic' in self.planes:
+            rank = {s.key[1]: i for i, s in enumerate(mi)}
+            st = plane('noic', None, size=len(mi))
+            for s in self.planes['noic']: s.cp = st + rank[s.key[1]]
+        scripts = sorted([p for p in self.planes if p.startswith('script:')], key=lambda p: (-len(self.planes[p]), p))
+        for p in scripts + [p for p in self.planes if p.startswith('baked:')] + ['negspacers']:
+            st = plane(p, self.planes.get(p, []))
+            for i, s in enumerate(self.planes.get(p, [])): s.cp = st + i
+        for p in self.planes:
+            if p not in self.layout and p != 'zwsp': raise ValueError('plane %s was not placed' % p)
+        self.ordered = sorted(self.slots, key=lambda s: (s.key[0] == 'space' and s.neg < 0, s.cp))
+        for i, s in enumerate(self.ordered): s.gid = i + 1
+
     def allocate(self):
+        if self.implicit: return self.allocate_implicit()
         used = {0x200B, 0x202F}
         mi = self.mi
         def claim(s, cp):
@@ -426,8 +492,11 @@ def build(fonts_dir, spec, outdir, name):
     b.add_spacers()
     b.add_script_variants()
     b.add_baked()
-    b.add_rules()
-    b.add_overlays()
+    if not b.implicit or spec.get('keep_unused'):
+        b.add_rules()
+        b.add_overlays()
+    else:
+        b.rules = {}; b.overlays = {}
     b.allocate()
     ttf = b.compile(name)
     os.makedirs(outdir, exist_ok=True)
@@ -469,6 +538,7 @@ def write_map(b, path, name):
         if al: e['alt'] = al.cp
         glyphs.setdefault(font, OrderedDict())[str(ch)] = e
     m['glyphs'] = glyphs
+    if getattr(b, 'layout', None): m['layout'] = b.layout
     var = OrderedDict()
     for (font, ch, size, shift), s in b.variants.items():
         var.setdefault('%s,%s' % (size, shift), OrderedDict())['%s:%d' % (font, ch)] = [s.cp, em(s.adv)]

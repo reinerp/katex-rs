@@ -72,7 +72,7 @@ pub fn render_to_string(
     }?;
 
     if settings.output == OutputFormat::CompactHtml {
-        if let Some(markup) = crate::compact::render(&dom_tree, settings) {
+        if let Some(markup) = crate::compact::render(&ctx.font_metrics, &dom_tree, settings) {
             return match markup {
                 Ok(markup) => Ok(markup),
                 Err(e)

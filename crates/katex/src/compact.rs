@@ -437,7 +437,11 @@ fn ceil_em(v: f64) -> String {
 
 /// Renders `root` (the tree `build_tree` made for [`OutputFormat::CompactHtml`]) as compact
 /// markup, or `None` if the tree is not one this module handles.
-pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<String, ParseError>> {
+pub(crate) fn render(
+    fm: &crate::font_metrics_data::FontMetricsData,
+    root: &DomSpan,
+    settings: &Settings,
+) -> Option<Result<String, ParseError>> {
     let is_katex = root.classes.contains("katex") || root.classes.contains("katex-display");
     if !is_katex {
         return None;
@@ -445,7 +449,7 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     // `FONT_RUN`: glyph runs in the generated font in place of what it can express (see `mathrun`).
     let lv = levels_of(settings);
     let hybrid = (lv & levels::FONT_RUN != 0 && lv & levels::FLAT != 0 && lv & levels::UNWRAP_HTML != 0)
-        .then(|| mathrun::transform(root, settings))
+        .then(|| mathrun::transform(fm, root, settings))
         .flatten();
     let local;
     let (root, settings) = if let Some(h) = &hybrid {
