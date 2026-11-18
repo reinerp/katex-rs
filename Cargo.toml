@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/katex", "crates/wasm-binding", "xtask"]
+members = ["crates/katex", "crates/katex-wasm", "crates/wasm-binding", "xtask"]
 default-members = ["crates/katex"]
 resolver = "3"
 
@@ -64,3 +64,13 @@ lto = false
 [profile.dev.package]
 insta.opt-level = 3
 similar.opt-level = 3
+
+# The WebAssembly bundle of crates/katex-wasm (see crates/katex-wasm/build.sh): cargo build --profile wasm --target wasm32-unknown-unknown -p katex-wasm
+[profile.wasm]
+inherits = "release"
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
