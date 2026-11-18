@@ -155,7 +155,7 @@ fn parse_size_with_unit(s: &str) -> Option<(f64, String)> {
         }
     }
 
-    let number_val: f64 = number_str.parse().ok()?;
+    let number_val: f64 = crate::numfmt::parse_f64(&number_str)?;
     Some((sign * number_val, unit))
 }
 

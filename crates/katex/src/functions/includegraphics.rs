@@ -193,7 +193,7 @@ fn size_data(str_val: &str) -> Result<MeasurementOwned, ParseError> {
     // Check if it's just a number with no unit specified
     if is_plain_number(str_val) {
         // Default unit is bp, per graphix package
-        let number = str_val.trim().parse::<f64>().map_err(|_| {
+        let number = crate::numfmt::parse_f64(str_val.trim()).ok_or_else(|| {
             ParseError::new(ParseErrorKind::InvalidIncludeGraphicsNumber {
                 value: str_val.to_owned(),
             })
@@ -208,7 +208,7 @@ fn size_data(str_val: &str) -> Result<MeasurementOwned, ParseError> {
     if let Some((sign, number_str, unit_str)) = parse_size_with_unit(str_val) {
         // Combine sign and magnitude, then convert to number
         let number_with_sign = format!("{sign}{number_str}");
-        let number = number_with_sign.parse::<f64>().map_err(|_| {
+        let number = crate::numfmt::parse_f64(&number_with_sign).ok_or_else(|| {
             ParseError::new(ParseErrorKind::InvalidIncludeGraphicsNumber {
                 value: str_val.to_owned(),
             })

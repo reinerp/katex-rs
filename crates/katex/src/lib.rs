@@ -456,6 +456,7 @@ pub use crate::build_common::make_fragment;
 pub use crate::build_common::wrap_fragment;
 
 pub mod namespace;
+pub(crate) mod numfmt;
 
 /// Current version of the KaTeX Rust implementation
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

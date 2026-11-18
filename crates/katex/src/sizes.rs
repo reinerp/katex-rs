@@ -148,7 +148,7 @@ fn em_value(value: &str) -> Option<f64> {
         return Some(0.0);
     }
     let n = v.strip_suffix("em")?;
-    n.trim().parse::<f64>().ok().filter(|v| v.is_finite())
+    crate::numfmt::parse_f64(n.trim()).filter(|v| v.is_finite())
 }
 
 /// `[left, right]` of a `margin` shorthand.

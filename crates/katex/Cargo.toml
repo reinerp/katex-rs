@@ -36,13 +36,16 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 [features]
 # `mathml`: the MathML builders and the `Mathml` / `HtmlAndMathml` outputs. Off, those outputs are HTML only and the builders are not linked in
 # (the WebAssembly bundle of crates/katex-wasm needs neither).
-default = ["mathml", "sizes", "diagnostics"]
+default = ["mathml", "sizes", "diagnostics", "std-float"]
 mathml = []
 # `sizes`: `Settings::compact_sizes` and `compact::take_sizes` (the widths of stacks and formulas computed from the tree, `crate::sizes`).
 sizes = []
 # `diagnostics`: `Debug` dumps of parse nodes and tokens in a few error messages (`\begin`, `\end`), and the `\show` macro (prints to stdout). Off, the messages name the token
 # only and `\show` does nothing: the `Debug` implementations of every parse node are not linked in.
 diagnostics = []
+# `std-float`: numbers are read and written with core's float parser and formatter. Off, `numfmt` has small routines instead (exact for what the renderer writes
+# and reads, see there), `compact_precision` is ignored, and about 25 KB of core's float code and tables are not linked in.
+std-float = []
 backtrace = []
 wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "dep:console_error_panic_hook"]
 

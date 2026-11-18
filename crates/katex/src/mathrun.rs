@@ -217,7 +217,7 @@ pub fn collect_runs<R>(f: impl FnOnce() -> R) -> (R, Vec<RunRecord>) {
 /// `value` of `em`, or `None` if it is anything else.
 fn em_value(value: &str) -> Option<f64> {
     let n = value.strip_suffix("em")?;
-    n.parse::<f64>().ok().filter(|v| v.is_finite())
+    crate::numfmt::parse_f64(n).filter(|v| v.is_finite())
 }
 
 fn font_id(family: Family, italic: bool) -> Option<u8> {

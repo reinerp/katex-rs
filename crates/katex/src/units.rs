@@ -153,19 +153,19 @@ pub fn make_em(n: f64) -> String {
     const PRECISION: i64 = 10_000;
 
     if !n.is_finite() {
-        return finalize_em(n.to_string());
+        return finalize_em(crate::numfmt::fixed4(n));
     }
 
     let max_safe = (i64::MAX as f64) / (PRECISION as f64);
     if n.abs() >= max_safe {
-        return finalize_em(format!("{n:.4}"));
+        return finalize_em(crate::numfmt::fixed4(n));
     }
 
     let scaled_float = n * PRECISION as f64;
     let scaled_abs = scaled_float.abs();
     let frac = scaled_abs - scaled_abs.floor();
     if (frac - 0.5).abs() <= f64::EPSILON * scaled_abs.max(1.0) {
-        return finalize_em(format!("{n:.4}"));
+        return finalize_em(crate::numfmt::fixed4(n));
     }
 
     let mut scaled_int = scaled_float.round() as i64;

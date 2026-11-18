@@ -342,7 +342,8 @@ impl Rounding {
 /// An `em` value with at most `sf` significant figures (all of them if `sf` is 0). A value that
 /// is not a plain number of ems is kept; a non-zero one stays non-zero.
 fn round_sig(value: &str, sf: u32) -> String {
-    if sf == 0 {
+    if sf == 0 || cfg!(not(feature = "std-float")) {
+        // (without `std-float` the precision is ignored: it needs core's `{:e}` formatter)
         return value.to_owned();
     }
     let Some(number) = value.strip_suffix("em") else {
@@ -406,7 +407,7 @@ fn strip_sizes(el: &mut El) {
 /// hair makes a box that is a unit too narrow.
 fn ceil_em(v: f64) -> String {
     let n = (v * 10_000.0 - 1e-7).ceil() / 10_000.0;
-    let text = format!("{n:.4}");
+    let text = crate::numfmt::fixed4(n);
     let text = text.trim_end_matches('0').trim_end_matches('.');
     let text = text
         .strip_prefix("0.")
@@ -781,7 +782,7 @@ pub(crate) fn em_str(x: i64) -> String {
 /// truncates to for one in a hundred sizes of an em of a page of 16 px.
 fn em_scaled(v: i64, ratio: f64) -> String {
     let x = v as f64 / 1e4 / ratio;
-    let text = format!("{x:.6}");
+    let text = crate::numfmt::fixed(x, 6);
     let text = text.trim_end_matches('0').trim_end_matches('.');
     if text.is_empty() || text == "-0" {
         "0".to_owned()
@@ -1196,7 +1197,7 @@ fn merge_item(x: &mut El) {
         .style
         .iter()
         .filter(|(p, _)| matches!(*p, "margin-left" | "margin-right"))
-        .map(|(_, v)| v.strip_suffix("em").and_then(|n| n.parse::<f64>().ok()))
+        .map(|(_, v)| v.strip_suffix("em").and_then(crate::numfmt::parse_f64))
         .sum::<Option<f64>>();
     if let Some(i) = x.style.iter().position(|(p, _)| *p == "width") {
         match (
@@ -1204,7 +1205,7 @@ fn merge_item(x: &mut El) {
             x.style[i]
                 .1
                 .strip_suffix("em")
-                .and_then(|n| n.parse::<f64>().ok()),
+                .and_then(crate::numfmt::parse_f64),
         ) {
             (Some(m), Some(w)) => x.style[i].1 = ceil_em(w - m),
             _ => {

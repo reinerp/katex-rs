@@ -103,7 +103,7 @@ pub fn parse_array(
         // Get current arraystretch if it's not set by the environment
         let stretch = parser.gullet.expand_macro_as_text("\\arraystretch")?;
         if let Some(stretch) = stretch {
-            let stretch_val = stretch.parse::<f64>().map_err(|_| {
+            let stretch_val = crate::numfmt::parse_f64(&stretch).ok_or_else(|| {
                 ParseError::new(ParseErrorKind::InvalidArrayStretch {
                     stretch: stretch.clone(),
                 })
