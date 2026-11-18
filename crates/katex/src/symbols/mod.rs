@@ -69,7 +69,10 @@ pub struct Symbols {
     text: KeyMap<String, CharInfo>,
 }
 
+#[cfg(not(feature = "packed-symbols"))]
 include!("../generated/symbols_data.rs");
+#[cfg(any(test, feature = "packed-symbols"))]
+mod packed;
 
 /// Default implementation for Symbols
 ///
@@ -206,9 +209,10 @@ impl Symbols {
     /// ```
     #[must_use]
     pub fn get_math(&self, name: &str) -> Option<&CharInfo> {
-        self.math
-            .get(name)
-            .or_else(|| POPULATE_MATH_SYMBOLS_MAP.get(name))
+        let found = self.math.get(name);
+        #[cfg(not(feature = "packed-symbols"))]
+        let found = found.or_else(|| POPULATE_MATH_SYMBOLS_MAP.get(name));
+        found
     }
 
     /// Retrieves character information for a symbol in text mode
@@ -235,9 +239,10 @@ impl Symbols {
     /// ```
     #[must_use]
     pub fn get_text(&self, name: &str) -> Option<&CharInfo> {
-        self.text
-            .get(name)
-            .or_else(|| POPULATE_TEXT_SYMBOLS_MAP.get(name))
+        let found = self.text.get(name);
+        #[cfg(not(feature = "packed-symbols"))]
+        let found = found.or_else(|| POPULATE_TEXT_SYMBOLS_MAP.get(name));
+        found
     }
 
     /// Retrieves character information for a symbol in the specified mode
@@ -273,15 +278,35 @@ impl Symbols {
         }
     }
 
+    #[cfg(not(feature = "packed-symbols"))]
+    fn static_has_math(name: &str) -> bool {
+        POPULATE_MATH_SYMBOLS_MAP.contains_key(name)
+    }
+
+    #[cfg(not(feature = "packed-symbols"))]
+    fn static_has_text(name: &str) -> bool {
+        POPULATE_TEXT_SYMBOLS_MAP.contains_key(name)
+    }
+
+    #[cfg(feature = "packed-symbols")]
+    const fn static_has_math(_name: &str) -> bool {
+        false
+    }
+
+    #[cfg(feature = "packed-symbols")]
+    const fn static_has_text(_name: &str) -> bool {
+        false
+    }
+
     /// Checks if a symbol exists in the specified mode
     #[must_use]
     pub fn contains(&self, mode: Mode, name: &str) -> bool {
         match mode {
             Mode::Math => {
-                self.math.contains_key(name) || POPULATE_MATH_SYMBOLS_MAP.contains_key(name)
+                self.math.contains_key(name) || Self::static_has_math(name)
             }
             Mode::Text => {
-                self.text.contains_key(name) || POPULATE_TEXT_SYMBOLS_MAP.contains_key(name)
+                self.text.contains_key(name) || Self::static_has_text(name)
             }
         }
     }
@@ -478,6 +503,8 @@ impl TryFrom<&str> for Group {
 #[must_use]
 pub fn create_symbols() -> Symbols {
     let mut symbols = Symbols::new();
+    #[cfg(feature = "packed-symbols")]
+    packed::load(&mut symbols);
 
     // mathTextSymbols loop: numbers and symbols for math mode
     let math_text_symbols = "0123456789/@.\"";

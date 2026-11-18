@@ -50,6 +50,9 @@ std-float = []
 fast-hash = []
 # `fixed-levels`: the compact output always uses `levels::ALL | levels::FONT_RUN` (`Settings::compact_levels` is ignored), so the code of the other levels is not linked in.
 fixed-levels = []
+# `packed-symbols`: the symbol tables are read from `generated/symbols_packed.bin` (tools/gen_tables.py: about 600 entries; the keys of `acceptUnicodeChar` are derived) into the
+# context's tables when it is made, instead of the 966 entries of the static tables of `generated/symbols_data.rs` that lookups fall back on.
+packed-symbols = []
 # `packed-metrics`: the character metrics are read from `generated/font_metrics_packed.bin` (columns of LEB128 numbers, about half the transferred size in a WebAssembly bundle),
 # unpacked when the `KatexContext` is made, instead of the constant tables of `generated/font_metrics_data.rs`.
 packed-metrics = []

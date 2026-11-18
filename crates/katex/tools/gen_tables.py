@@ -246,8 +246,78 @@ def symbols():
     )
 
 
+# the groups in the order of the packed symbol table (src/symbols/packed.rs reads them back by this index)
+PACKED_GROUPS = ["bin", "close", "inner", "open", "punct", "rel", "accent-token", "mathord", "op-token", "spacing", "textord"]
+PACKED_GROUP_OF = {"accent": "accent-token", "op": "op-token"}
+
+
+def varint(n):
+    out = bytearray()
+    while True:
+        b = n & 0x7F
+        n >>= 7
+        if n:
+            out.append(b | 0x80)
+        else:
+            out.append(b)
+            return bytes(out)
+
+
+def packed_symbols():
+    """The symbol tables as the Rust side reads them with the `packed-symbols` feature (src/symbols/packed.rs): for the math table and then the text
+    table, the number of entries n, then the n names (length and bytes), n bytes (bit 7: the entry's `replace` character is also a key, bit 6: font
+    ams, low bits: the group's index in PACKED_GROUPS), n varints (the replace character, 0 for none). The entries are those of symbols.json,
+    in the order of their names; the table of every key (names and the characters of `acceptUnicodeChar`) is what `symbols()` writes: this checks it."""
+    data = json.load(open(os.path.join(CRATE, "data", "symbols.json")))
+    blob = b""
+    for modes, variant in ((["math"], "math"), (None, "text")):
+        syms = [s for s in data if (s["mode"] == "math") == (variant == "math")]
+        base = {}
+        for s in syms:
+            key = unescape_literal(convert_unicode_escapes(s["name"]))
+            rep = s.get("replace")
+            rch = unescape_literal(convert_unicode_escapes(rep)) if rep else None
+            assert rch is None or len(rch) == 1
+            entry = (s["font"], PACKED_GROUP_OF.get(s["group"], s["group"]), rch, bool(s["acceptUnicodeChar"] and rep is not None))
+            if key in base and base[key] != entry:
+                sys.exit("conflicting definitions of %r" % key)
+            base[key] = entry
+        names = sorted(base, key=lambda k: k.encode())
+        blob += varint(len(names))
+        for k in names:
+            b = k.encode()
+            blob += varint(len(b)) + b
+        for k in names:
+            f, g, r, acc = base[k]
+            blob += bytes([(0x80 if acc else 0) | (0x40 if f == "ams" else 0) | PACKED_GROUPS.index(g)])
+        for k in names:
+            r = base[k][2]
+            blob += varint(ord(r) if r else 0)
+        # check against the table that symbol_table writes
+        full = {}
+        for k in names:
+            f, g, r, acc = base[k]
+            for key in [k] + ([r] if acc else []):
+                info = (f, g, r)
+                if key in full and full[key] != info:
+                    sys.exit("conflicting definitions of %r" % key)
+                full[key] = info
+        ref = {}
+        for s in syms:
+            rep = s.get("replace")
+            for name in [s["name"]] + ([rep] if s["acceptUnicodeChar"] and rep is not None else []):
+                key = unescape_literal(convert_unicode_escapes(name))
+                rch = unescape_literal(convert_unicode_escapes(rep)) if rep else None
+                ref[key] = (s["font"], PACKED_GROUP_OF.get(s["group"], s["group"]), rch)
+        if full != ref:
+            sys.exit("the packed %s symbols are not the table of symbols()" % variant)
+    return blob
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
+    with open(os.path.join(OUT, "symbols_packed.bin"), "wb") as f:
+        f.write(packed_symbols())
     for name, source, text in [
         ("sigmas_and_xis.rs", "data/sigmas_and_xis.json", sigmas_and_xis()),
         ("font_metrics_data.rs", "data/font_metrics_data.json", font_metrics()),
