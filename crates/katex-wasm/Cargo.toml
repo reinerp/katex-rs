@@ -14,5 +14,8 @@ crate-type = ["cdylib"]
 katex-rs = { path = "../katex", default-features = false }
 
 [features]
+default = ["bump"]
+# the bump allocator (src/bump.rs) instead of dlmalloc: memory of a render is taken back all at once
+bump = []
 # every output mode of the native harness (stock KaTeX markup with MathML, HTML only, flat) next to the hybrid one; off: the hybrid output only
 full = ["katex-rs/mathml", "katex-rs/sizes"]

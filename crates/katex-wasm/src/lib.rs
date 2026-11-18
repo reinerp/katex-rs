@@ -5,6 +5,30 @@ use katex::types::{OutputFormat, TrustSetting};
 use katex::{render_to_string, KatexContext, Settings};
 use std::cell::RefCell;
 
+#[cfg(feature = "bump")]
+mod bump;
+
+/// The allocator: a bump allocator whose scratch region is emptied after every render (see `bump.rs`).
+#[cfg(feature = "bump")]
+#[global_allocator]
+static ALLOC: bump::Bump = bump::Bump::new();
+
+/// Runs `f` with its allocations in the persistent region.
+fn persistent<R>(f: impl FnOnce() -> R) -> R {
+    #[cfg(feature = "bump")]
+    let before = ALLOC.set_persistent(true);
+    let r = f();
+    #[cfg(feature = "bump")]
+    ALLOC.set_persistent(before);
+    r
+}
+
+/// Takes back what the render just done allocated.
+fn end_render() {
+    #[cfg(feature = "bump")]
+    ALLOC.reset();
+}
+
 /// Options of the shipped (hybrid) output that a page may change: `set_label`, `set_wrap_min`, `set_line`.
 #[derive(Clone, Copy)]
 struct Config {
@@ -63,12 +87,14 @@ thread_local! {
 fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
     STATE.with(|s| {
         let mut s = s.borrow_mut();
-        let st = s.get_or_insert_with(|| State {
-            ctx: KatexContext::default(),
-            cfg: Config { label: true, wrap_min: katex::compact::DEFAULT_WRAP_MIN, line: None },
-            settings: (0..12).map(|_| None).collect(),
-            out: Vec::new(),
-            status: 0,
+        let st = s.get_or_insert_with(|| {
+            persistent(|| State {
+                ctx: KatexContext::default(),
+                cfg: Config { label: true, wrap_min: katex::compact::DEFAULT_WRAP_MIN, line: None },
+                settings: (0..12).map(|_| None).collect(),
+                out: Vec::new(),
+                status: 0,
+            })
         });
         f(st)
     })
@@ -77,18 +103,19 @@ fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
 fn render_one(st: &mut State, tex: &str, display: bool, mode: u32, out: &mut Vec<u8>) -> u32 {
     let idx = (mode * 2 + u32::from(display)) as usize;
     if st.settings[idx].is_none() {
-        st.settings[idx] = Some(settings(display, mode, st.cfg));
+        st.settings[idx] = Some(persistent(|| settings(display, mode, st.cfg)));
     }
-    match render_to_string(&st.ctx, tex, st.settings[idx].as_ref().unwrap()) {
-        Ok(h) => {
-            out.extend_from_slice(h.as_bytes());
-            0
-        }
-        Err(e) => {
-            out.extend_from_slice(e.to_string().as_bytes());
-            1
-        }
-    }
+    let settings = st.settings[idx].as_ref().unwrap();
+    let (text, status) = match render_to_string(&st.ctx, tex, settings) {
+        Ok(h) => (h, 0),
+        Err(e) => (e.to_string(), 1),
+    };
+    // `\gdef` and `\global\def` write into the settings' macros: every formula starts from the settings as they were made (the macros are
+    // replaced, not cleared: a cleared map would keep its table, which lives in memory that the end of the render takes back)
+    drop(core::mem::take(&mut *settings.macros.borrow_mut()));
+    persistent(|| out.reserve(text.len() + 8));
+    out.extend_from_slice(text.as_bytes());
+    status
 }
 
 fn reconfigure(f: impl FnOnce(&mut Config)) {
@@ -118,10 +145,12 @@ pub extern "C" fn set_line(ascent: f64, descent: f64) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn alloc(n: usize) -> *mut u8 {
-    let mut v = Vec::<u8>::with_capacity(n.max(1));
-    let p = v.as_mut_ptr();
-    std::mem::forget(v);
-    p
+    persistent(|| {
+        let mut v = Vec::<u8>::with_capacity(n.max(1));
+        let p = v.as_mut_ptr();
+        std::mem::forget(v);
+        p
+    })
 }
 
 /// # Safety
@@ -138,7 +167,7 @@ pub extern "C" fn init(mode: u32) {
         for d in 0..2 {
             let idx = (mode * 2 + d) as usize;
             if st.settings[idx].is_none() {
-                st.settings[idx] = Some(settings(d == 1, mode, st.cfg));
+                st.settings[idx] = Some(persistent(|| settings(d == 1, mode, st.cfg)));
             }
         }
     });
@@ -155,6 +184,7 @@ pub unsafe extern "C" fn render(ptr: *const u8, len: usize, flags: u32) -> *cons
         out.clear();
         st.status = render_one(st, &tex, flags & 1 == 1, flags >> 1, &mut out);
         st.out = out;
+        end_render();
         st.out.as_ptr()
     })
 }
@@ -176,15 +206,18 @@ pub unsafe extern "C" fn render_batch(ptr: *const u8, len: usize, flags: u32) ->
             let tex = String::from_utf8_lossy(&inp[i + 5..i + 5 + n]);
             i += 5 + n;
             let at = out.len();
+            persistent(|| out.reserve(16));
             out.extend_from_slice(&[0; 4]);
             let s0 = out.len();
             let s = render_one(st, &tex, display, mode, &mut out);
             if s != 0 {
                 status = s;
+                persistent(|| out.reserve(1));
                 out.insert(s0, 0);
             }
             let l = (out.len() - s0) as u32;
             out[at..at + 4].copy_from_slice(&l.to_le_bytes());
+            end_render();
         }
         st.status = status;
         st.out = out;
