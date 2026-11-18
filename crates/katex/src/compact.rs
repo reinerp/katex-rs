@@ -369,6 +369,16 @@ fn round_sig(value: &str, sf: u32) -> String {
     format!("{text}em")
 }
 
+/// The levels in force: those of the settings, or with the `fixed-levels` feature always the hybrid output with every step.
+#[inline(always)]
+fn levels_of(settings: &Settings) -> u32 {
+    if cfg!(feature = "fixed-levels") {
+        levels::ALL | levels::FONT_RUN
+    } else {
+        settings.compact_levels
+    }
+}
+
 /// Appends `node` to `kids`, splicing in a fragment's children.
 fn push_node(kids: &mut Vec<Node>, node: Node) {
     match node {
@@ -430,9 +440,8 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
         return None;
     }
     // `FONT_RUN`: glyph runs in the generated font in place of what it can express (see `mathrun`).
-    let hybrid = (settings.compact_levels & levels::FONT_RUN != 0
-        && settings.compact_levels & levels::FLAT != 0
-        && settings.compact_levels & levels::UNWRAP_HTML != 0)
+    let lv = levels_of(settings);
+    let hybrid = (lv & levels::FONT_RUN != 0 && lv & levels::FLAT != 0 && lv & levels::UNWRAP_HTML != 0)
         .then(|| mathrun::transform(root, settings))
         .flatten();
     let local;
@@ -447,7 +456,7 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     };
     let rounding = Rounding {
         sf: settings.compact_precision,
-        extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
+        extents: lv & levels::ROUND_EXTENTS != 0,
     };
     // `compact_sizes`: the widths of the stacks, computed from the tree (see `crate::sizes`).
     #[cfg_attr(not(feature = "sizes"), allow(unused_mut))]
@@ -469,7 +478,7 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
     write_el(
         &mut out,
         &el,
-        settings.compact_levels,
+        lv,
         settings.max_output_size,
     )
     .map(|()| out)
@@ -568,7 +577,7 @@ enum Role {
 }
 
 fn rewrite(root: &mut El, settings: &Settings, rounding: Rounding, font: bool) {
-    let levels = settings.compact_levels;
+    let levels = levels_of(settings);
     if levels & levels::UNWRAP_HTML != 0 && !settings.fleqn {
         unwrap_html(root, settings.compact_label);
     }

@@ -9,8 +9,8 @@ use alloc::sync::Arc;
 use std::io::{self, Write as _};
 
 use crate::{
+    KatexContext,
     ParseError,
-    font_metrics_data::MAIN_REGULAR_METRICS,
     macros::{MacroContextInterface, MacroDefinition, MacroExpansion, MacroExpansionResult},
     symbols::{Atom, Group},
     types::{Mode, ParseErrorKind, TokenText},
@@ -82,9 +82,9 @@ const IS_SPACE_AFTER_DOTS: Set<&'static str> = StrSet::new(&[
     "]",
 ]);
 
-fn calculate_latex_raise_a() -> String {
-    let t_metrics = MAIN_REGULAR_METRICS.get(&('T' as u32));
-    let a_metrics = MAIN_REGULAR_METRICS.get(&('A' as u32));
+fn calculate_latex_raise_a(ctx: &KatexContext) -> String {
+    let t_metrics = ctx.font_metrics.get_metric("Main-Regular", 'T' as u32).ok().flatten();
+    let a_metrics = ctx.font_metrics.get_metric("Main-Regular", 'A' as u32).ok().flatten();
 
     if let (Some(t), Some(a)) = (t_metrics, a_metrics) {
         let raise_value = 0.7f64.mul_add(-a.height, t.height);
@@ -404,8 +404,8 @@ pub const BUILTIN_MACROS: Map<&str, MacroDefinition> = StrMap::new(&[
     // New KaTeX logo based on tweaking LaTeX logo
     (
         "\\KaTeX",
-        MacroDefinition::StaticFunction(|_context| {
-            let raise_value = calculate_latex_raise_a();
+        MacroDefinition::StaticFunction(|context| {
+            let raise_value = calculate_latex_raise_a(context.context());
             Ok(MacroExpansionResult::String(format!(
                 "\\textrm{{\\html@mathml{{K\\kern-.17em\\raisebox{{{raise_value}}}{{\\scriptstyle A}}\\kern-.15em\\TeX}}{{KaTeX}}}}"
             )))
@@ -432,8 +432,8 @@ pub const BUILTIN_MACROS: Map<&str, MacroDefinition> = StrMap::new(&[
     // \scriptstyle, which has a scale factor of 0.7 (see Options.js).
     (
         "\\LaTeX",
-        MacroDefinition::StaticFunction(|_context| {
-            let raise_value = calculate_latex_raise_a();
+        MacroDefinition::StaticFunction(|context| {
+            let raise_value = calculate_latex_raise_a(context.context());
             Ok(MacroExpansionResult::String(format!(
                 "\\textrm{{\\html@mathml{{L\\kern-.36em\\raisebox{{{raise_value}}}{{\\scriptstyle A}}\\kern-.15em\\TeX}}{{LaTeX}}}}"
             )))

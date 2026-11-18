@@ -14,8 +14,11 @@ crate-type = ["cdylib"]
 katex-rs = { path = "../katex", default-features = false, features = ["fast-hash"] }
 
 [features]
-default = ["bump"]
-# the bump allocator (src/bump.rs) instead of dlmalloc: memory of a render is taken back all at once
+default = ["bump", "hybrid-only"]
+# the bump allocator (src/bump.rs) instead of dlmalloc: the memory of a render is taken back all at once
 bump = []
-# every output mode of the native harness (stock KaTeX markup with MathML, HTML only, flat) next to the hybrid one; off: the hybrid output only
-full = ["katex-rs/mathml", "katex-rs/sizes"]
+# the shipped bundle: the hybrid output only (levels::ALL | levels::FONT_RUN, with compact_line / compact_wrap_min / label); every other output and pass is left out
+hybrid-only = ["katex-rs/fixed-levels", "katex-rs/packed-metrics"]
+# for comparison: every output mode of the native harness (stock KaTeX markup with MathML, HTML only, flat) next to the hybrid one, with core's float code
+# and Debug dumps (build with --no-default-features --features bump,full)
+full = ["katex-rs/mathml", "katex-rs/sizes", "katex-rs/std-float", "katex-rs/diagnostics"]
