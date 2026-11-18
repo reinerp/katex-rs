@@ -266,8 +266,8 @@ def varint(n):
 def packed_symbols():
     """The symbol tables as the Rust side reads them with the `packed-symbols` feature (src/symbols/packed.rs): for the math table and then the text
     table, the number of entries n, then the n names (length and bytes), n bytes (bit 7: the entry's `replace` character is also a key, bit 6: font
-    ams, low bits: the group's index in PACKED_GROUPS), n varints (the replace character, 0 for none). The entries are those of symbols.json,
-    in the order of their names; the table of every key (names and the characters of `acceptUnicodeChar`) is what `symbols()` writes: this checks it."""
+    ams, low bits: the group's index in PACKED_GROUPS), n varints (the replace character as a zig-zag difference from the previous entry's, 0 for none). The entries are
+    those of symbols.json, in the order of their replace characters; the table of every key (names and the characters of `acceptUnicodeChar`) is what `symbols()` writes: this checks it."""
     data = json.load(open(os.path.join(CRATE, "data", "symbols.json")))
     blob = b""
     for modes, variant in ((["math"], "math"), (None, "text")):
@@ -282,7 +282,8 @@ def packed_symbols():
             if key in base and base[key] != entry:
                 sys.exit("conflicting definitions of %r" % key)
             base[key] = entry
-        names = sorted(base, key=lambda k: k.encode())
+        # in the order of the replaced character, which is also what compresses best (the characters are written as differences)
+        names = sorted(base, key=lambda k: (ord(base[k][2]) if base[k][2] else 0, k.encode()))
         blob += varint(len(names))
         for k in names:
             b = k.encode()
@@ -290,9 +291,13 @@ def packed_symbols():
         for k in names:
             f, g, r, acc = base[k]
             blob += bytes([(0x80 if acc else 0) | (0x40 if f == "ams" else 0) | PACKED_GROUPS.index(g)])
+        prev = 0
         for k in names:
             r = base[k][2]
-            blob += varint(ord(r) if r else 0)
+            c = ord(r) if r else 0
+            d = c - prev
+            blob += varint((d << 1) if d >= 0 else ((-d << 1) - 1))
+            prev = c
         # check against the table that symbol_table writes
         full = {}
         for k in names:

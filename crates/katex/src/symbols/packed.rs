@@ -1,7 +1,7 @@
 //! The symbol tables as `tools/gen_tables.py` packs them (`generated/symbols_packed.bin`), for the `packed-symbols` feature.
 //!
 //! For the math table and then the text table: the number of entries n (LEB128), the n names (length, bytes), n bytes (bit 7: the character the entry
-//! replaces is a key too, bit 6: the font is AMS, the low bits: the index of the group in [`GROUPS`]), and n replacement characters (LEB128, 0 for none).
+//! replaces is a key too, bit 6: the font is AMS, the low bits: the index of the group in [`GROUPS`]), and n replacement characters (as zig-zag LEB128 differences from the previous entry's, 0 for none; the entries are in the order of those characters).
 
 use super::{Atom, CharInfo, Font, Group, NonAtom, Symbols};
 use crate::namespace::KeyMap;
@@ -49,9 +49,12 @@ fn read_table(blob: &[u8], pos: &mut usize, table: &mut KeyMap<String, CharInfo>
     let info_at = *pos;
     *pos += n;
     table.reserve(n + n / 2);
+    let mut c = 0_i64;
     for (i, name) in names.into_iter().enumerate() {
         let b = blob[info_at + i];
-        let replace = char::from_u32(varint(blob, pos)).filter(|c| *c != '\0');
+        let z = i64::from(varint(blob, pos));
+        c += if z & 1 == 0 { z >> 1 } else { -((z + 1) >> 1) };
+        let replace = char::from_u32(c as u32).filter(|c| *c != '\0');
         let info = CharInfo {
             font: if b & 0x40 != 0 { Font::Ams } else { Font::Main },
             group: GROUPS[usize::from(b & 0x0F)],
