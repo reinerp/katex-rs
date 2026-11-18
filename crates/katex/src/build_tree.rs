@@ -5,6 +5,7 @@
 
 use crate::build_common::make_span;
 use crate::build_html::build_html;
+#[cfg(feature = "mathml")]
 use crate::build_mathml::build_mathml;
 use crate::context::KatexContext;
 use crate::dom_tree::DomSpan;
@@ -78,12 +79,20 @@ pub fn build_tree(
     let options = options_from_settings(settings);
 
     let katex_node = match settings.output {
+        #[cfg(feature = "mathml")]
         OutputFormat::Mathml => {
             // MathML only
             return build_mathml(ctx, tree, expression, &options, settings.display_mode, true);
         }
+        #[cfg(feature = "mathml")]
         OutputFormat::Html => {
             // HTML only
+            let html_node = build_html(ctx, tree, &options)?;
+            make_span("katex", vec![html_node], None, None)
+        }
+        #[cfg(not(feature = "mathml"))]
+        OutputFormat::Html | OutputFormat::Mathml | OutputFormat::HtmlAndMathml => {
+            // HTML only (the MathML builders are not linked in)
             let html_node = build_html(ctx, tree, &options)?;
             make_span("katex", vec![html_node], None, None)
         }
@@ -101,6 +110,7 @@ pub fn build_tree(
             }
             katex
         }
+        #[cfg(feature = "mathml")]
         OutputFormat::HtmlAndMathml => {
             // Both HTML and MathML
             let mathml_node = build_mathml(

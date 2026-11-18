@@ -35,6 +35,7 @@ pub mod options;
 pub mod parse_tree;
 /// Core parsing logic for LaTeX mathematical expressions.
 pub mod parser;
+#[cfg(feature = "sizes")]
 pub mod sizes;
 pub mod spacing_data;
 pub mod static_map;

@@ -12,6 +12,18 @@ use crate::define_function::{FunctionDefSpec, FunctionPropSpec};
 use crate::parser::parse_node::{AnyParseNode, NodeType, ParseNode, ParseNodeEnvironment};
 use crate::types::{ArgType, Mode, ParseError, ParseErrorKind};
 
+/// The `Debug` text of a node or token for an error message; without the `diagnostics` feature a placeholder (the `Debug` code of every parse node stays out of the binary).
+#[cfg(feature = "diagnostics")]
+fn debug_text<T: core::fmt::Debug>(value: &T) -> String {
+    format!("{value:?}")
+}
+
+/// See above.
+#[cfg(not(feature = "diagnostics"))]
+fn debug_text<T>(_value: &T) -> String {
+    "?".to_owned()
+}
+
 /// Environment delimiters. HTML/MathML rendering is defined in the
 /// corresponding defineEnvironment definitions.
 pub fn define_environment(ctx: &mut KatexContext) {
@@ -28,7 +40,7 @@ pub fn define_environment(ctx: &mut KatexContext) {
             let parser = context.parser;
             let ParseNode::OrdGroup(name_group) = &args[0] else {
                 return Err(ParseError::new(ParseErrorKind::InvalidEnvironmentName {
-                    value: format!("{:?}", args[0]),
+                    value: debug_text(&args[0]),
                 }));
             };
             let mut env_name = String::new();
@@ -39,7 +51,7 @@ pub fn define_environment(ctx: &mut KatexContext) {
                     env_name.push(' ');
                 } else {
                     return Err(ParseError::new(ParseErrorKind::InvalidEnvironmentName {
-                        value: format!("{:?}", args[0]),
+                        value: debug_text(&args[0]),
                     }));
                 }
             }
@@ -81,7 +93,7 @@ pub fn define_environment(ctx: &mut KatexContext) {
             let Some(ParseNode::Environment(end_node)) = parser.parse_function(None, None)? else {
                 return Err(ParseError::new(
                     ParseErrorKind::ExpectedEnvironmentAfterEnd {
-                        found: format!("{end_name_token:?}"),
+                        found: debug_text(&end_name_token),
                     },
                 ));
             };

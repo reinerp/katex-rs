@@ -56,6 +56,7 @@ pub struct KatexContext {
 
 impl KatexContext {
     /// Set default values of functions
+    #[cfg_attr(not(feature = "mathml"), inline(always))]
     pub fn define_function(&mut self, spec: FunctionDefSpec) {
         let data = Arc::new(FunctionSpec {
             node_type: spec.node_type,
@@ -82,6 +83,7 @@ impl KatexContext {
     }
 
     /// Register only the HTML and MathML builders for a function
+    #[cfg_attr(not(feature = "mathml"), inline(always))]
     pub fn define_function_builders(
         &mut self,
         node_type: NodeType,
@@ -92,12 +94,16 @@ impl KatexContext {
             self.html_group_builders.insert(node_type, builder);
         }
 
+        #[cfg(feature = "mathml")]
         if let Some(builder) = mathml_builder {
             self.mathml_group_builders.insert(node_type, builder);
         }
+        #[cfg(not(feature = "mathml"))]
+        let _ = mathml_builder;
     }
 
     /// Set default values of environments
+    #[cfg_attr(not(feature = "mathml"), inline(always))]
     pub fn define_environment(&mut self, spec: EnvDefSpec) {
         let data = Arc::new(EnvSpec {
             node_type: spec.node_type,
@@ -118,6 +124,7 @@ impl KatexContext {
                 .insert(spec.node_type, html_builder);
         }
 
+        #[cfg(feature = "mathml")]
         if let Some(mathml_builder) = spec.mathml_builder {
             self.mathml_group_builders
                 .insert(spec.node_type, mathml_builder);

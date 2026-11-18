@@ -378,18 +378,21 @@ fn push_node(kids: &mut Vec<Node>, node: Node) {
     }
 }
 
+#[cfg(feature = "sizes")]
 thread_local! {
     /// The sizes of the formula rendered last with [`Settings::compact_sizes`] on.
     static LAST_SIZES: core::cell::RefCell<Option<crate::sizes::FormulaSizes>> = const { core::cell::RefCell::new(None) };
 }
 
 /// The sizes of the formula that this thread rendered last with [`Settings::compact_sizes`] on (and no other since).
+#[cfg(feature = "sizes")]
 #[must_use]
 pub fn take_sizes() -> Option<crate::sizes::FormulaSizes> {
     LAST_SIZES.with(|l| l.borrow_mut().take())
 }
 
 /// The `--sz` that [`convert`] gives a stack whose width is known and nothing took: removed.
+#[cfg(feature = "sizes")]
 fn strip_sizes(el: &mut El) {
     el.style.retain(|(p, _)| *p != "--sz");
     for kid in &mut el.kids {
@@ -446,7 +449,9 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
         extents: settings.compact_levels & levels::ROUND_EXTENTS != 0,
     };
     // `compact_sizes`: the widths of the stacks, computed from the tree (see `crate::sizes`).
+    #[cfg_attr(not(feature = "sizes"), allow(unused_mut))]
     let mut tree = root.clone();
+    #[cfg(feature = "sizes")]
     if settings.compact_sizes {
         let sizes = crate::sizes::annotate(&mut tree, hybrid.is_some());
         LAST_SIZES.with(|l| *l.borrow_mut() = Some(sizes));
@@ -455,6 +460,7 @@ pub(crate) fn render(root: &DomSpan, settings: &Settings) -> Option<Result<Strin
         return None;
     };
     rewrite(&mut el, settings, rounding, hybrid.is_some());
+    #[cfg(feature = "sizes")]
     if settings.compact_sizes {
         strip_sizes(&mut el);
     }

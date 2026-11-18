@@ -1364,12 +1364,15 @@ pub const BUILTIN_MACROS: Map<&str, MacroDefinition> = StrMap::new(&[
         "\\show",
         MacroDefinition::StaticFunction(|context| {
             let tok = context.pop_token()?;
+            #[cfg(feature = "diagnostics")]
             let name = &tok.text;
+            #[cfg(feature = "diagnostics")]
             let func_desc = if context.context().functions.contains_key(name.as_str()) {
                 "<function>"
             } else {
                 "<not a function>"
             };
+            #[cfg(feature = "diagnostics")]
             println!(
                 "{:?} {:?} {} {:?} {:?}",
                 tok,
@@ -1378,6 +1381,8 @@ pub const BUILTIN_MACROS: Map<&str, MacroDefinition> = StrMap::new(&[
                 context.context().symbols.get_math(name.as_str()),
                 context.context().symbols.get_text(name.as_str())
             );
+            #[cfg(not(feature = "diagnostics"))]
+            let _ = tok;
             Ok(MacroExpansionResult::Empty)
         }),
     ),

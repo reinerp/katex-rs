@@ -34,7 +34,15 @@ web-sys = { version = "0.3.105", features = ["Document", "DocumentFragment", "No
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
 [features]
-default = []
+# `mathml`: the MathML builders and the `Mathml` / `HtmlAndMathml` outputs. Off, those outputs are HTML only and the builders are not linked in
+# (the WebAssembly bundle of crates/katex-wasm needs neither).
+default = ["mathml", "sizes", "diagnostics"]
+mathml = []
+# `sizes`: `Settings::compact_sizes` and `compact::take_sizes` (the widths of stacks and formulas computed from the tree, `crate::sizes`).
+sizes = []
+# `diagnostics`: `Debug` dumps of parse nodes and tokens in a few error messages (`\begin`, `\end`), and the `\show` macro (prints to stdout). Off, the messages name the token
+# only and `\show` does nothing: the `Debug` implementations of every parse node are not linked in.
+diagnostics = []
 backtrace = []
 wasm = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "dep:console_error_panic_hook"]
 

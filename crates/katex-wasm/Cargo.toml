@@ -15,4 +15,4 @@ katex-rs = { path = "../katex", default-features = false }
 
 [features]
 # every output mode of the native harness (stock KaTeX markup with MathML, HTML only, flat) next to the hybrid one; off: the hybrid output only
-full = []
+full = ["katex-rs/mathml", "katex-rs/sizes"]
